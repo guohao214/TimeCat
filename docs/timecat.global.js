@@ -36,7 +36,6 @@ var TimeCat = (function (exports) {
     NodeStore.nodeId = 1
     const nodeStore = new NodeStore()
 
-    var RecordType
     ;(function (RecordType) {
         RecordType[(RecordType['HEAD'] = 0)] = 'HEAD'
         RecordType[(RecordType['SNAPSHOT'] = 1)] = 'SNAPSHOT'
@@ -49,26 +48,23 @@ var TimeCat = (function (exports) {
         RecordType[(RecordType['AUDIO'] = 8)] = 'AUDIO'
         RecordType[(RecordType['CANVAS'] = 9)] = 'CANVAS'
         RecordType[(RecordType['TERMINATE'] = 10)] = 'TERMINATE'
-    })(RecordType || (RecordType = {}))
-    var FormElementEvent
+    })(exports.RecordType || (exports.RecordType = {}))
     ;(function (FormElementEvent) {
         FormElementEvent[(FormElementEvent['PROP'] = 0)] = 'PROP'
         FormElementEvent[(FormElementEvent['INPUT'] = 1)] = 'INPUT'
         FormElementEvent[(FormElementEvent['CHANGE'] = 2)] = 'CHANGE'
         FormElementEvent[(FormElementEvent['FOCUS'] = 3)] = 'FOCUS'
         FormElementEvent[(FormElementEvent['BLUR'] = 4)] = 'BLUR'
-    })(FormElementEvent || (FormElementEvent = {}))
-    var MouseEventType
+    })(exports.FormElementEvent || (exports.FormElementEvent = {}))
     ;(function (MouseEventType) {
         MouseEventType[(MouseEventType['MOVE'] = 0)] = 'MOVE'
         MouseEventType[(MouseEventType['CLICK'] = 1)] = 'CLICK'
-    })(MouseEventType || (MouseEventType = {}))
-    var TransactionMode
+    })(exports.MouseEventType || (exports.MouseEventType = {}))
     ;(function (TransactionMode) {
         TransactionMode['READONLY'] = 'readonly'
         TransactionMode['READWRITE'] = 'readwrite'
         TransactionMode['VERSIONCHANGE'] = 'versionchange'
-    })(TransactionMode || (TransactionMode = {}))
+    })(exports.TransactionMode || (exports.TransactionMode = {}))
 
     class IndexedDBOperator {
         constructor(DBName, version, storeName, callback) {
@@ -90,6 +86,7 @@ var TimeCat = (function (exports) {
                     const objectStore = db.createObjectStore(storeName, { autoIncrement: true, keyPath: 'id' })
                     objectStore.createIndex('type', 'type', { unique: false })
                     objectStore.createIndex('data', 'data', { unique: false })
+                    objectStore.createIndex('relatedId', 'relatedId', { unique: false })
                     objectStore.createIndex('time', 'time', { unique: false })
                 }
             }
@@ -106,7 +103,7 @@ var TimeCat = (function (exports) {
             })
         }
         getStore() {
-            return this.withIDBStore(TransactionMode.READWRITE)
+            return this.withIDBStore(exports.TransactionMode.READWRITE)
         }
         async add(data) {
             const store = await this.getStore()
@@ -177,6 +174,7 @@ var TimeCat = (function (exports) {
     }
     var PlayerTypes
     ;(function (PlayerTypes) {
+        PlayerTypes['RESET'] = 'RESET'
         PlayerTypes['SPEED'] = 'SPEED'
     })(PlayerTypes || (PlayerTypes = {}))
     function PlayerReducer(state, action) {
@@ -188,6 +186,8 @@ var TimeCat = (function (exports) {
         }
         const { type, data } = action
         switch (type) {
+            case PlayerTypes.RESET:
+                return initState
             case PlayerTypes.SPEED:
                 return {
                     ...state,
@@ -207,6 +207,7 @@ var TimeCat = (function (exports) {
     }
     var ProgressTypes
     ;(function (ProgressTypes) {
+        ProgressTypes['RESET'] = 'RESET'
         ProgressTypes['FORWARD'] = 'FORWARD'
         ProgressTypes['BACKWARD'] = 'BACKWARD'
         ProgressTypes['INFO'] = 'INFO'
@@ -220,6 +221,8 @@ var TimeCat = (function (exports) {
         }
         const { type, data } = action
         switch (type) {
+            case ProgressTypes.RESET:
+                return initState$1
             case ProgressTypes.FORWARD:
                 return {
                     ...state,
@@ -340,8 +343,12 @@ var TimeCat = (function (exports) {
 
     function createStore(reducer, initState = {}) {
         let state = initState
-        const topics = {
+        let topics = {
             all: []
+        }
+        function unsubscribe() {
+            state = reducer(state, { type: 'RESET', data: {} })
+            topics = { all: [] }
         }
         function subscribe(...args) {
             let type = 'all'
@@ -394,6 +401,7 @@ var TimeCat = (function (exports) {
             }
         }
         return {
+            unsubscribe,
             subscribe,
             dispatch,
             getState
@@ -2160,7 +2168,7 @@ var TimeCat = (function (exports) {
         return (+hour * 3600 + +min * 60 + +sec) * 1000
     }
     function isSnapshot(frame) {
-        return frame.type === RecordType.SNAPSHOT && !frame.data.frameId
+        return frame.type === exports.RecordType.SNAPSHOT && !frame.data.frameId
     }
     function classifyRecords(records) {
         const packs = []
@@ -2175,7 +2183,7 @@ var TimeCat = (function (exports) {
         records.forEach((record, index) => {
             const next = records[index + 1]
             switch (record.type) {
-                case RecordType.HEAD:
+                case exports.RecordType.HEAD:
                     const headData = record.data
                     const lastHEAD = replayPack && replayPack.head
                     if (lastHEAD && isSameHEAD(headData, lastHEAD)) {
@@ -2191,7 +2199,7 @@ var TimeCat = (function (exports) {
                         }
                     }
                     break
-                case RecordType.SNAPSHOT:
+                case exports.RecordType.SNAPSHOT:
                     if (!record.data.frameId) {
                         replayData = {
                             snapshot: record,
@@ -2210,7 +2218,7 @@ var TimeCat = (function (exports) {
                         replayData.records.push(record)
                     }
                     break
-                case RecordType.AUDIO:
+                case exports.RecordType.AUDIO:
                     if (isAudioBufferStr(record)) {
                         const audioData = record
                         replayData.audio.bufferStrList.push(...audioData.data.data)
@@ -2345,7 +2353,7 @@ var TimeCat = (function (exports) {
     const recoverNative = new RecoverNative()
     recoverNative.recoverMethod('MutationObserver')
 
-    const snapshot = () => window.__ReplayData__ && window.__ReplayData__.snapshot.data
+    const snapshot = () => window.G_REPLAY_DATA && window.G_REPLAY_DATA.snapshot.data
     const href = () => snapshot().href
     function filteringTemplate(tpl) {
         return tpl
@@ -2358,7 +2366,7 @@ var TimeCat = (function (exports) {
         return str.replace(reg, '<\\/script>')
     }
     function proxyResource(url) {
-        const { proxy } = window.__ReplayOptions__
+        const { proxy } = window.G_REPLAY_OPTIONS
         if (proxy) {
             const proxyUrl = stitchingLink(proxy, url)
             return proxyUrl
@@ -2374,8 +2382,7 @@ var TimeCat = (function (exports) {
     function completeCssHref(str, parentVNode) {
         return str.replace(/(url\(['"]?((\/{1,2}|\.\.?\/)[^'"]*?)['"]?(?=\)))/g, (string, b, url) => {
             if (!url.startsWith('data')) {
-                const baseUrl =
-                    (parentVNode === null || parentVNode === void 0 ? void 0 : parentVNode.attrs['css-url']) || href()
+                const baseUrl = parentVNode?.attrs['css-url'] || href()
                 const newUrl = new URL(url, baseUrl)
                 return string.replace(url, newUrl.href)
             }
@@ -2390,8 +2397,7 @@ var TimeCat = (function (exports) {
             setTimeout(() => {
                 const doc = node.getRootNode()
                 const context = doc.defaultView
-                const { href, path } =
-                    (context === null || context === void 0 ? void 0 : context.__ReplayLocation__) || {}
+                const { href, path } = context?.G_REPLAY_LOCATION || {}
                 if (path && href) {
                     const relationHref = new URL(path, href)
                     const attrs = node.getAttributeNames()
@@ -9623,8 +9629,9 @@ var TimeCat = (function (exports) {
         const count = await DBOperator.count()
         if (count) {
             DBOperator.add({
-                type: RecordType.TERMINATE,
+                type: exports.RecordType.TERMINATE,
                 data: null,
+                relatedId: window.G_RECORD_RELATED_ID,
                 time: getRadix64TimeStr()
             })
         }
@@ -9638,11 +9645,11 @@ var TimeCat = (function (exports) {
         downloadAudios()
     }
     function downloadAudios() {
-        if (window.__ReplayData__) {
-            const replayData = window.__ReplayData__
-            if (replayData.audio) {
-                const { src } = replayData.audio
-                download(src, src)
+        if (window.G_REPLAY_DATA) {
+            const replayData = window.G_REPLAY_DATA
+            const audioSrc = replayData?.audio?.src
+            if (audioSrc) {
+                download(audioSrc, audioSrc)
                 return
             }
         }
@@ -9657,9 +9664,9 @@ var TimeCat = (function (exports) {
         const { scripts, autoplay } = exportOptions
         const options = { autoplay }
         const scriptList = scripts || []
-        if (!scriptList.some(item => item.name === 'time-cat-init')) {
+        if (!scriptList.some(item => item.name === 'timecat-init')) {
             scriptList.push({
-                name: 'time-cat-init',
+                name: 'timecat-init',
                 src: `new TimeCat.Player(${JSON.stringify(options)})`
             })
         }
@@ -9694,8 +9701,8 @@ var TimeCat = (function (exports) {
         }
         return null
     }
-    function extract(replayDataList, exportOptions) {
-        return replayDataList.map(replayPack => {
+    function extract(replayPacks, exportOptions) {
+        return replayPacks.map(replayPack => {
             replayPack.body.forEach(replayData => {
                 if (exportOptions && exportOptions.audioExternal) {
                     replayData.audio = extractAudio(replayData.audio)
@@ -9729,7 +9736,7 @@ var TimeCat = (function (exports) {
         injectScripts(html, [{ src: loadingScriptContent }])
     }
     async function injectData(html, exportOptions) {
-        const data = window.__ReplayPacks__ || (await getDataFromDB(exportOptions))
+        const data = window.G_REPLAY_PACKS || (await getDataFromDB(exportOptions))
         if (!data) {
             return
         }
@@ -9744,7 +9751,7 @@ var TimeCat = (function (exports) {
             }
             outputStr += String.fromCharCode(num)
         }
-        const replayData = `var __ReplayStrPacks__ =  '${outputStr}'`
+        const replayData = `var G_REPLAY_STR_PACKS =  '${outputStr}'`
         injectScripts(html, [{ src: replayData }])
     }
     async function makeCssInline(packs) {
@@ -9768,12 +9775,14 @@ var TimeCat = (function (exports) {
             }
             for (let i = 0; i < records.length; i++) {
                 const record = records[i]
-                if (record.type === RecordType.DOM) {
+                if (record.type === exports.RecordType.DOM) {
                     const { addedNodes } = record.data
-                    for (let j = 0; j < addedNodes.length; j++) {
-                        const node = addedNodes[j].node
-                        if (isVNode(node)) {
-                            extractLink(node, extractLinkList)
+                    if (addedNodes) {
+                        for (let j = 0; j < addedNodes.length; j++) {
+                            const node = addedNodes[j].node
+                            if (isVNode(node)) {
+                                extractLink(node, extractLinkList)
+                            }
                         }
                     }
                 }
@@ -9853,10 +9862,10 @@ var TimeCat = (function (exports) {
         }
         async uploadToDB(records) {
             return await fetch(this.uploadUrl, {
-                headers: {
-                    'content-type': 'application/json'
-                },
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify(records)
             }).then(() => true)
         }
@@ -9876,6 +9885,9 @@ var TimeCat = (function (exports) {
                 clearTimeout(this.timer)
                 this.timer = null
             }
+        }
+        destroy() {
+            this.listener.length = 0
         }
         observe() {
             this.timer = window.setTimeout(() => {
@@ -10209,18 +10221,24 @@ var TimeCat = (function (exports) {
 
     class Watcher {
         constructor(options) {
-            this.getRadix64TimeStr = getRadix64TimeStr
             this.getNode = id => nodeStore.getNode.call(nodeStore, id)
             this.getNodeId = n => nodeStore.getNodeId.call(nodeStore, n)
-            const { emit, context } = options
+            const { emit, context, relatedId } = options
             this.options = options
+            this.relatedId = relatedId
             this.context = context
             this.emit = emit
         }
         uninstall(fn) {
-            this.options.reverseStore.add(fn)
+            this.options.listenStore.add(fn)
         }
-        emitData(data, callback) {
+        emitData(type, record, callback) {
+            const data = {
+                type,
+                data: record,
+                relatedId: this.relatedId,
+                time: getRadix64TimeStr()
+            }
             if (callback) {
                 return this.emit(callback(data))
             }
@@ -10362,7 +10380,7 @@ var TimeCat = (function (exports) {
             removeNodesMap.forEach((parent, node) => {
                 const id = this.getNodeId(node)
                 const parentId = this.getNodeId(parent)
-                if (parentId) {
+                if (id && parentId) {
                     removedNodes.push({
                         parentId,
                         id
@@ -10404,12 +10422,13 @@ var TimeCat = (function (exports) {
                 attrs,
                 texts
             }
+            Object.keys(data).forEach(type => {
+                if (!data[type].length) {
+                    delete data[type]
+                }
+            })
             if (Object.values(data).some(item => item.length)) {
-                this.emitData({
-                    type: RecordType.DOM,
-                    data,
-                    time: this.getRadix64TimeStr()
-                })
+                this.emitData(exports.RecordType.DOM, data)
             }
         }
     }
@@ -10463,39 +10482,30 @@ var TimeCat = (function (exports) {
                             target.oldValue = value
                         }
                         data = {
-                            type: RecordType.FORM_EL,
-                            data: {
-                                type: eventType === 'input' ? FormElementEvent.INPUT : FormElementEvent.CHANGE,
-                                id: this.getNodeId(e.target),
-                                key,
-                                value: !patches.length ? newValue : value,
-                                patches
-                            },
-                            time: this.getRadix64TimeStr()
+                            type:
+                                eventType === 'input'
+                                    ? exports.FormElementEvent.INPUT
+                                    : exports.FormElementEvent.CHANGE,
+                            id: this.getNodeId(e.target),
+                            key,
+                            value: !patches.length ? newValue : value,
+                            patches
                         }
                         break
                     case 'focus':
                         data = {
-                            type: RecordType.FORM_EL,
-                            data: {
-                                type: FormElementEvent.FOCUS,
-                                id: this.getNodeId(e.target)
-                            },
-                            time: this.getRadix64TimeStr()
+                            type: exports.FormElementEvent.FOCUS,
+                            id: this.getNodeId(e.target)
                         }
                         break
                     case 'blur':
                         data = {
-                            type: RecordType.FORM_EL,
-                            data: {
-                                type: FormElementEvent.BLUR,
-                                id: this.getNodeId(e.target)
-                            },
-                            time: this.getRadix64TimeStr()
+                            type: exports.FormElementEvent.BLUR,
+                            id: this.getNodeId(e.target)
                         }
                         break
                 }
-                this.emitData(data)
+                this.emitData(exports.RecordType.FORM_EL, data)
             }
         }
         kidnapInputs(options) {
@@ -10531,16 +10541,12 @@ var TimeCat = (function (exports) {
             handles.concat([]).forEach(handle => handle())
             function handleEvent(key, value) {
                 const data = {
-                    type: FormElementEvent.PROP,
+                    type: exports.FormElementEvent.PROP,
                     id: self.getNodeId(this),
                     key,
                     value
                 }
-                self.emitData({
-                    type: RecordType.FORM_EL,
-                    data,
-                    time: self.getRadix64TimeStr()
-                })
+                self.emitData(exports.RecordType.FORM_EL, data)
             }
         }
     }
@@ -10560,26 +10566,14 @@ var TimeCat = (function (exports) {
                 }
             }
             this.locationHandle = e => {
-                var _a, _b
                 const contextNodeId = this.getContextNodeId(e)
-                const [, , path] = e.arguments || [
-                    ,
-                    ,
-                    (_b = (_a = this.context) === null || _a === void 0 ? void 0 : _a.location) === null ||
-                    _b === void 0
-                        ? void 0
-                        : _b.pathname
-                ]
+                const [, , path] = e.arguments || [, , this.context?.location?.pathname]
                 const { href, hash } = this.context.location
-                this.emit({
-                    type: RecordType.LOCATION,
-                    data: {
-                        contextNodeId,
-                        href,
-                        hash,
-                        path
-                    },
-                    time: this.getRadix64TimeStr()
+                this.emitData(exports.RecordType.LOCATION, {
+                    contextNodeId,
+                    href,
+                    hash,
+                    path
                 })
             }
             this.init()
@@ -10609,26 +10603,49 @@ var TimeCat = (function (exports) {
         init() {
             this.mouseMove()
             this.mouseClick()
+            this.detectScrolling()
+        }
+        detectScrolling() {
+            let timer
+            const evt = () => {
+                this.scrolling = true
+                clearTimeout(timer)
+                timer = this.context.setTimeout(() => {
+                    this.scrolling = false
+                    if (this.latestMove) {
+                        this.sendMoveData(this.latestMove)
+                        this.latestMove = null
+                    }
+                }, 500)
+            }
+            const eventNames = ['mousewheel', 'scroll']
+            eventNames.forEach(name => {
+                this.context.document.addEventListener(name, evt, true)
+                this.uninstall(() => {
+                    this.context.document.removeEventListener(name, evt, true)
+                })
+            })
+        }
+        sendMoveData(position) {
+            const { x, y, id } = position
+            this.emitData(exports.RecordType.MOUSE, {
+                type: exports.MouseEventType.MOVE,
+                id,
+                x,
+                y
+            })
         }
         mouseMove() {
             const evt = e => {
                 const offsetPosition = this.getOffsetPosition(e, this.context)
-                if (offsetPosition) {
-                    const { x, y, id } = offsetPosition
-                    this.emitData({
-                        type: RecordType.MOUSE,
-                        data: {
-                            type: MouseEventType.MOVE,
-                            id,
-                            x,
-                            y
-                        },
-                        time: this.getRadix64TimeStr()
-                    })
+                if (this.scrolling) {
+                    this.latestMove = offsetPosition
+                    return
                 }
+                offsetPosition && this.sendMoveData(offsetPosition)
             }
             const name = 'mousemove'
-            const listenerHandle = throttle(evt, 350, {
+            const listenerHandle = throttle(evt, 300, {
                 trailing: true,
                 leading: true
             })
@@ -10641,13 +10658,9 @@ var TimeCat = (function (exports) {
             const evt = e => {
                 const offsetPosition = this.getOffsetPosition(e, this.context)
                 if (offsetPosition) {
-                    this.emitData({
-                        type: RecordType.MOUSE,
-                        data: {
-                            type: MouseEventType.CLICK,
-                            ...offsetPosition
-                        },
-                        time: this.getRadix64TimeStr()
+                    this.emitData(exports.RecordType.MOUSE, {
+                        type: exports.MouseEventType.CLICK,
+                        ...offsetPosition
                     })
                 }
             }
@@ -10659,8 +10672,7 @@ var TimeCat = (function (exports) {
             this.context.document.addEventListener(name, listenerHandle)
         }
         getOffsetPosition(event, context) {
-            var _a
-            const { mode } = context.__RecordOptions__
+            const { mode } = context.G_RECORD_OPTIONS
             const { view, target, x, y, offsetX, offsetY } = event
             if (view === context) {
                 const doc = target.ownerDocument
@@ -10700,10 +10712,7 @@ var TimeCat = (function (exports) {
                           x: offsetX,
                           y: offsetY
                       }
-                const frameElement =
-                    (_a = doc === null || doc === void 0 ? void 0 : doc.defaultView) === null || _a === void 0
-                        ? void 0
-                        : _a.frameElement
+                const frameElement = doc?.defaultView?.frameElement
                 if (frameElement && mode === 'default') {
                     position.y += frameElement.offsetTop
                     position.x += frameElement.offsetLeft
@@ -10724,7 +10733,7 @@ var TimeCat = (function (exports) {
         }
         init() {
             const { scrollingElement } = this.context.document
-            this.emitData(this.wrapData(scrollingElement || document))
+            this.emitData(...this.wrapData(scrollingElement || document))
             this.registerEvent({
                 context: this.context,
                 eventTypes: ['scroll'],
@@ -10737,20 +10746,19 @@ var TimeCat = (function (exports) {
         }
         wrapData(target) {
             const element = target instanceof this.context.HTMLElement ? target : this.getCompatibleTarget(target)
-            return {
-                type: RecordType.SCROLL,
-                data: {
+            return [
+                exports.RecordType.SCROLL,
+                {
                     id: this.getNodeId(element) || null,
                     top: this.scrollTop(element),
                     left: this.scrollLeft(element)
-                },
-                time: this.getRadix64TimeStr()
-            }
+                }
+            ]
         }
         handleFn(e) {
             const { type, target } = e
             if (type === 'scroll') {
-                this.emitData(this.wrapData(target))
+                this.emitData(...this.wrapData(target))
             }
         }
     }
@@ -10763,7 +10771,7 @@ var TimeCat = (function (exports) {
             this.init()
         }
         init() {
-            this.emitData(this.wrapData(this.context.document))
+            this.emitData(...this.wrapData(this.context.document))
             this.registerEvent({
                 context: this.context,
                 eventTypes: ['resize'],
@@ -10777,19 +10785,18 @@ var TimeCat = (function (exports) {
         handleFn(e) {
             const { type, target } = e
             if (type === 'resize') {
-                this.emitData(this.wrapData(target))
+                this.emitData(...this.wrapData(target))
             }
         }
         wrapData(target) {
-            return {
-                type: RecordType.WINDOW,
-                data: {
+            return [
+                exports.RecordType.WINDOW,
+                {
                     id: this.getNodeId(target) || null,
                     width: this.width(),
                     height: this.height()
-                },
-                time: this.getRadix64TimeStr()
-            }
+                }
+            ]
         }
     }
 
@@ -10797,15 +10804,11 @@ var TimeCat = (function (exports) {
         constructor(options) {
             super(options)
             this.aggregateDataEmitter = this.aggregateManager((id, strokes) => {
-                this.emitData({
-                    type: RecordType.CANVAS,
-                    data: {
-                        id,
-                        strokes
-                    },
-                    time: this.getRadix64TimeStr()
+                this.emitData(exports.RecordType.CANVAS, {
+                    id,
+                    strokes
                 })
-            }, 100)
+            }, 30)
             this.init()
         }
         init() {
@@ -10813,13 +10816,9 @@ var TimeCat = (function (exports) {
             const canvasElements = document.getElementsByTagName('canvas')
             Array.from(canvasElements).forEach(canvas => {
                 const dataURL = canvas.toDataURL()
-                this.emitData({
-                    type: RecordType.CANVAS,
-                    data: {
-                        id: this.getNodeId(canvas),
-                        src: dataURL
-                    },
-                    time: this.getRadix64TimeStr()
+                this.emitData(exports.RecordType.CANVAS, {
+                    id: this.getNodeId(canvas),
+                    src: dataURL
                 })
             })
             const ctxProto = CanvasRenderingContext2D.prototype
@@ -10846,10 +10845,9 @@ var TimeCat = (function (exports) {
                             : null
                     },
                     set: function (value) {
-                        var _a
                         const id = self.getNodeId(this.canvas)
                         self.aggregateDataEmitter(id, name, value)
-                        return (_a = original.set) === null || _a === void 0 ? void 0 : _a.apply(this, arguments)
+                        return original.set?.apply(this, arguments)
                     }
                 })
                 this.uninstall(() => {
@@ -10909,11 +10907,7 @@ var TimeCat = (function (exports) {
         }
         handleFn() {}
         wrapData() {
-            return {
-                type: RecordType.TERMINATE,
-                data: null,
-                time: this.getRadix64TimeStr()
-            }
+            return [exports.RecordType.TERMINATE, null]
         }
     }
 
@@ -11013,22 +11007,14 @@ var TimeCat = (function (exports) {
             this.uninstall(() => {
                 recorder.stop()
             })
-            this.emitData({
-                type: RecordType.AUDIO,
-                data: {
-                    type: 'opts',
-                    data: recorder.getOptions()
-                },
-                time: this.getRadix64TimeStr()
+            this.emitData(exports.RecordType.AUDIO, {
+                type: 'opts',
+                data: recorder.getOptions()
             })
             recorder.onProgress = audioBase64Data => {
-                this.emitData({
-                    type: RecordType.AUDIO,
-                    data: {
-                        type: 'base64',
-                        data: audioBase64Data
-                    },
-                    time: this.getRadix64TimeStr()
+                this.emitData(exports.RecordType.AUDIO, {
+                    type: 'base64',
+                    data: audioBase64Data
                 })
             }
         }
@@ -11040,17 +11026,13 @@ var TimeCat = (function (exports) {
             this.init()
         }
         init() {
-            const snapshot = this.DOMSnapshot(this.options.context || window)
-            this.emitData(snapshot)
+            const snapshotData = this.DOMSnapshotData(this.options.context || window)
+            this.emitData(exports.RecordType.SNAPSHOT, snapshotData)
         }
-        DOMSnapshot(context) {
+        DOMSnapshotData(context) {
             return {
-                type: RecordType.SNAPSHOT,
-                data: {
-                    vNode: createElement(context.document.documentElement),
-                    ...this.getInitInfo(context)
-                },
-                time: this.getRadix64TimeStr()
+                vNode: createElement(context.document.documentElement),
+                ...this.getInitInfo(context)
             }
         }
         getInitInfo(context) {
@@ -11078,12 +11060,8 @@ var TimeCat = (function (exports) {
 
     var name = 'timecat'
     var author = 'oct16'
-    var version = '1.2.0-alpha.2'
+    var version = '1.2.0-alpha.8'
     var description = 'TimeCat Web Recorder'
-    var main = 'lib/timecat.cjs.js'
-    var module = 'lib/timecat.esm.js'
-    var types = 'lib/timecat.d.ts'
-    var files = ['lib']
     var keywords = [
         'recorder',
         'replay',
@@ -11122,17 +11100,19 @@ var TimeCat = (function (exports) {
     }
     var devDependencies = {
         '@ls-lint/ls-lint': '^1.9.2',
-        '@microsoft/api-extractor': '^7.8.9',
+        '@microsoft/api-extractor': '^7.9.13',
         '@rollup/plugin-commonjs': '^11.0.2',
-        '@rollup/plugin-html': '^0.1.1',
+        '@rollup/plugin-html': '^0.2.0',
         '@rollup/plugin-json': '^4.1.0',
         '@rollup/plugin-node-resolve': '^7.1.3',
         '@rollup/plugin-replace': '^2.3.1',
         '@types/diff': '^4.0.2',
+        '@types/fingerprintjs2': '^2.0.0',
         '@types/jest': '^26.0.0',
         '@types/node': '^13.9.2',
         '@types/pako': '^1.0.1',
         '@types/smoothscroll-polyfill': '^0.3.1',
+        '@types/tapable': '^1.0.6',
         '@typescript-eslint/eslint-plugin': '^3.9.0',
         '@typescript-eslint/parser': '^3.9.0',
         '@zerollup/ts-transform-paths': '^1.7.17',
@@ -11146,6 +11126,7 @@ var TimeCat = (function (exports) {
         'eslint-plugin-node': '^11.1.0',
         'eslint-plugin-prettier': '^3.1.4',
         execa: '^4.0.0',
+        fingerprintjs2: '^2.1.2',
         'fs-extra': '^8.1.0',
         husky: '^4.2.5',
         jest: '^26.0.1',
@@ -11154,14 +11135,16 @@ var TimeCat = (function (exports) {
         minimist: '^1.2.5',
         pako: '^1.0.11',
         prettier: '^2.0.5',
-        rollup: '^1.32.0',
+        rollup: '^2.26.10',
+        'rollup-plugin-node-polyfills': '^0.2.1',
         'rollup-plugin-scss': '^2.5.0',
         'rollup-plugin-string': '^3.0.0',
-        'rollup-plugin-terser': '^5.3.0',
+        'rollup-plugin-terser': '^7.0.0',
         'rollup-plugin-typescript2': '^0.26.0',
         'rollup-plugin-visualizer': '^4.0.4',
         semver: '^7.3.2',
         'smoothscroll-polyfill': '^0.4.4',
+        tapable: '^1.1.3',
         'ts-jest': '^26.1.0',
         typescript: '^3.9.7'
     }
@@ -11179,10 +11162,6 @@ var TimeCat = (function (exports) {
         author: author,
         version: version,
         description: description,
-        main: main,
-        module: module,
-        types: types,
-        files: files,
         keywords: keywords,
         license: license,
         workspaces: workspaces,
@@ -11199,56 +11178,5818 @@ var TimeCat = (function (exports) {
         homepage: homepage
     }
 
-    function getHeadData() {
+    var fingerprint2 = createCommonjsModule(function (module) {
+        /*
+         * Fingerprintjs2 2.1.2 - Modern & flexible browser fingerprint library v2
+         * https://github.com/Valve/fingerprintjs2
+         * Copyright (c) 2020 Valentin Vasilyev (valentin@fingerprintjs.com)
+         * Licensed under the MIT (http://www.opensource.org/licenses/mit-license.php) license.
+         *
+         * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+         * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+         * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+         * ARE DISCLAIMED. IN NO EVENT SHALL VALENTIN VASILYEV BE LIABLE FOR ANY
+         * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+         * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+         * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+         * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+         * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+         * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+         */
+        /*
+         * This software contains code from open-source projects:
+         * MurmurHash3 by Karan Lyons (https://github.com/karanlyons/murmurHash3.js)
+         */
+
+        /* global define */
+        ;(function (name, context, definition) {
+            if (typeof window !== 'undefined' && typeof undefined === 'function' && undefined.amd) {
+                undefined(definition)
+            } else if (module.exports) {
+                module.exports = definition()
+            } else if (context.exports) {
+                context.exports = definition()
+            } else {
+                context[name] = definition()
+            }
+        })('Fingerprint2', commonjsGlobal, function () {
+            // detect if object is array
+            // only implement if no native implementation is available
+            if (typeof Array.isArray === 'undefined') {
+                Array.isArray = function (obj) {
+                    return Object.prototype.toString.call(obj) === '[object Array]'
+                }
+            }
+            /// MurmurHash3 related functions
+
+            //
+            // Given two 64bit ints (as an array of two 32bit ints) returns the two
+            // added together as a 64bit int (as an array of two 32bit ints).
+            //
+            var x64Add = function (m, n) {
+                m = [m[0] >>> 16, m[0] & 0xffff, m[1] >>> 16, m[1] & 0xffff]
+                n = [n[0] >>> 16, n[0] & 0xffff, n[1] >>> 16, n[1] & 0xffff]
+                var o = [0, 0, 0, 0]
+                o[3] += m[3] + n[3]
+                o[2] += o[3] >>> 16
+                o[3] &= 0xffff
+                o[2] += m[2] + n[2]
+                o[1] += o[2] >>> 16
+                o[2] &= 0xffff
+                o[1] += m[1] + n[1]
+                o[0] += o[1] >>> 16
+                o[1] &= 0xffff
+                o[0] += m[0] + n[0]
+                o[0] &= 0xffff
+                return [(o[0] << 16) | o[1], (o[2] << 16) | o[3]]
+            }
+
+            //
+            // Given two 64bit ints (as an array of two 32bit ints) returns the two
+            // multiplied together as a 64bit int (as an array of two 32bit ints).
+            //
+            var x64Multiply = function (m, n) {
+                m = [m[0] >>> 16, m[0] & 0xffff, m[1] >>> 16, m[1] & 0xffff]
+                n = [n[0] >>> 16, n[0] & 0xffff, n[1] >>> 16, n[1] & 0xffff]
+                var o = [0, 0, 0, 0]
+                o[3] += m[3] * n[3]
+                o[2] += o[3] >>> 16
+                o[3] &= 0xffff
+                o[2] += m[2] * n[3]
+                o[1] += o[2] >>> 16
+                o[2] &= 0xffff
+                o[2] += m[3] * n[2]
+                o[1] += o[2] >>> 16
+                o[2] &= 0xffff
+                o[1] += m[1] * n[3]
+                o[0] += o[1] >>> 16
+                o[1] &= 0xffff
+                o[1] += m[2] * n[2]
+                o[0] += o[1] >>> 16
+                o[1] &= 0xffff
+                o[1] += m[3] * n[1]
+                o[0] += o[1] >>> 16
+                o[1] &= 0xffff
+                o[0] += m[0] * n[3] + m[1] * n[2] + m[2] * n[1] + m[3] * n[0]
+                o[0] &= 0xffff
+                return [(o[0] << 16) | o[1], (o[2] << 16) | o[3]]
+            }
+            //
+            // Given a 64bit int (as an array of two 32bit ints) and an int
+            // representing a number of bit positions, returns the 64bit int (as an
+            // array of two 32bit ints) rotated left by that number of positions.
+            //
+            var x64Rotl = function (m, n) {
+                n %= 64
+                if (n === 32) {
+                    return [m[1], m[0]]
+                } else if (n < 32) {
+                    return [(m[0] << n) | (m[1] >>> (32 - n)), (m[1] << n) | (m[0] >>> (32 - n))]
+                } else {
+                    n -= 32
+                    return [(m[1] << n) | (m[0] >>> (32 - n)), (m[0] << n) | (m[1] >>> (32 - n))]
+                }
+            }
+            //
+            // Given a 64bit int (as an array of two 32bit ints) and an int
+            // representing a number of bit positions, returns the 64bit int (as an
+            // array of two 32bit ints) shifted left by that number of positions.
+            //
+            var x64LeftShift = function (m, n) {
+                n %= 64
+                if (n === 0) {
+                    return m
+                } else if (n < 32) {
+                    return [(m[0] << n) | (m[1] >>> (32 - n)), m[1] << n]
+                } else {
+                    return [m[1] << (n - 32), 0]
+                }
+            }
+            //
+            // Given two 64bit ints (as an array of two 32bit ints) returns the two
+            // xored together as a 64bit int (as an array of two 32bit ints).
+            //
+            var x64Xor = function (m, n) {
+                return [m[0] ^ n[0], m[1] ^ n[1]]
+            }
+            //
+            // Given a block, returns murmurHash3's final x64 mix of that block.
+            // (`[0, h[0] >>> 1]` is a 33 bit unsigned right shift. This is the
+            // only place where we need to right shift 64bit ints.)
+            //
+            var x64Fmix = function (h) {
+                h = x64Xor(h, [0, h[0] >>> 1])
+                h = x64Multiply(h, [0xff51afd7, 0xed558ccd])
+                h = x64Xor(h, [0, h[0] >>> 1])
+                h = x64Multiply(h, [0xc4ceb9fe, 0x1a85ec53])
+                h = x64Xor(h, [0, h[0] >>> 1])
+                return h
+            }
+
+            //
+            // Given a string and an optional seed as an int, returns a 128 bit
+            // hash using the x64 flavor of MurmurHash3, as an unsigned hex.
+            //
+            var x64hash128 = function (key, seed) {
+                key = key || ''
+                seed = seed || 0
+                var remainder = key.length % 16
+                var bytes = key.length - remainder
+                var h1 = [0, seed]
+                var h2 = [0, seed]
+                var k1 = [0, 0]
+                var k2 = [0, 0]
+                var c1 = [0x87c37b91, 0x114253d5]
+                var c2 = [0x4cf5ad43, 0x2745937f]
+                for (var i = 0; i < bytes; i = i + 16) {
+                    k1 = [
+                        (key.charCodeAt(i + 4) & 0xff) |
+                            ((key.charCodeAt(i + 5) & 0xff) << 8) |
+                            ((key.charCodeAt(i + 6) & 0xff) << 16) |
+                            ((key.charCodeAt(i + 7) & 0xff) << 24),
+                        (key.charCodeAt(i) & 0xff) |
+                            ((key.charCodeAt(i + 1) & 0xff) << 8) |
+                            ((key.charCodeAt(i + 2) & 0xff) << 16) |
+                            ((key.charCodeAt(i + 3) & 0xff) << 24)
+                    ]
+                    k2 = [
+                        (key.charCodeAt(i + 12) & 0xff) |
+                            ((key.charCodeAt(i + 13) & 0xff) << 8) |
+                            ((key.charCodeAt(i + 14) & 0xff) << 16) |
+                            ((key.charCodeAt(i + 15) & 0xff) << 24),
+                        (key.charCodeAt(i + 8) & 0xff) |
+                            ((key.charCodeAt(i + 9) & 0xff) << 8) |
+                            ((key.charCodeAt(i + 10) & 0xff) << 16) |
+                            ((key.charCodeAt(i + 11) & 0xff) << 24)
+                    ]
+                    k1 = x64Multiply(k1, c1)
+                    k1 = x64Rotl(k1, 31)
+                    k1 = x64Multiply(k1, c2)
+                    h1 = x64Xor(h1, k1)
+                    h1 = x64Rotl(h1, 27)
+                    h1 = x64Add(h1, h2)
+                    h1 = x64Add(x64Multiply(h1, [0, 5]), [0, 0x52dce729])
+                    k2 = x64Multiply(k2, c2)
+                    k2 = x64Rotl(k2, 33)
+                    k2 = x64Multiply(k2, c1)
+                    h2 = x64Xor(h2, k2)
+                    h2 = x64Rotl(h2, 31)
+                    h2 = x64Add(h2, h1)
+                    h2 = x64Add(x64Multiply(h2, [0, 5]), [0, 0x38495ab5])
+                }
+                k1 = [0, 0]
+                k2 = [0, 0]
+                switch (remainder) {
+                    case 15:
+                        k2 = x64Xor(k2, x64LeftShift([0, key.charCodeAt(i + 14)], 48))
+                    // fallthrough
+                    case 14:
+                        k2 = x64Xor(k2, x64LeftShift([0, key.charCodeAt(i + 13)], 40))
+                    // fallthrough
+                    case 13:
+                        k2 = x64Xor(k2, x64LeftShift([0, key.charCodeAt(i + 12)], 32))
+                    // fallthrough
+                    case 12:
+                        k2 = x64Xor(k2, x64LeftShift([0, key.charCodeAt(i + 11)], 24))
+                    // fallthrough
+                    case 11:
+                        k2 = x64Xor(k2, x64LeftShift([0, key.charCodeAt(i + 10)], 16))
+                    // fallthrough
+                    case 10:
+                        k2 = x64Xor(k2, x64LeftShift([0, key.charCodeAt(i + 9)], 8))
+                    // fallthrough
+                    case 9:
+                        k2 = x64Xor(k2, [0, key.charCodeAt(i + 8)])
+                        k2 = x64Multiply(k2, c2)
+                        k2 = x64Rotl(k2, 33)
+                        k2 = x64Multiply(k2, c1)
+                        h2 = x64Xor(h2, k2)
+                    // fallthrough
+                    case 8:
+                        k1 = x64Xor(k1, x64LeftShift([0, key.charCodeAt(i + 7)], 56))
+                    // fallthrough
+                    case 7:
+                        k1 = x64Xor(k1, x64LeftShift([0, key.charCodeAt(i + 6)], 48))
+                    // fallthrough
+                    case 6:
+                        k1 = x64Xor(k1, x64LeftShift([0, key.charCodeAt(i + 5)], 40))
+                    // fallthrough
+                    case 5:
+                        k1 = x64Xor(k1, x64LeftShift([0, key.charCodeAt(i + 4)], 32))
+                    // fallthrough
+                    case 4:
+                        k1 = x64Xor(k1, x64LeftShift([0, key.charCodeAt(i + 3)], 24))
+                    // fallthrough
+                    case 3:
+                        k1 = x64Xor(k1, x64LeftShift([0, key.charCodeAt(i + 2)], 16))
+                    // fallthrough
+                    case 2:
+                        k1 = x64Xor(k1, x64LeftShift([0, key.charCodeAt(i + 1)], 8))
+                    // fallthrough
+                    case 1:
+                        k1 = x64Xor(k1, [0, key.charCodeAt(i)])
+                        k1 = x64Multiply(k1, c1)
+                        k1 = x64Rotl(k1, 31)
+                        k1 = x64Multiply(k1, c2)
+                        h1 = x64Xor(h1, k1)
+                    // fallthrough
+                }
+                h1 = x64Xor(h1, [0, key.length])
+                h2 = x64Xor(h2, [0, key.length])
+                h1 = x64Add(h1, h2)
+                h2 = x64Add(h2, h1)
+                h1 = x64Fmix(h1)
+                h2 = x64Fmix(h2)
+                h1 = x64Add(h1, h2)
+                h2 = x64Add(h2, h1)
+                return (
+                    ('00000000' + (h1[0] >>> 0).toString(16)).slice(-8) +
+                    ('00000000' + (h1[1] >>> 0).toString(16)).slice(-8) +
+                    ('00000000' + (h2[0] >>> 0).toString(16)).slice(-8) +
+                    ('00000000' + (h2[1] >>> 0).toString(16)).slice(-8)
+                )
+            }
+
+            var defaultOptions = {
+                preprocessor: null,
+                audio: {
+                    timeout: 1000,
+                    // On iOS 11, audio context can only be used in response to user interaction.
+                    // We require users to explicitly enable audio fingerprinting on iOS 11.
+                    // See https://stackoverflow.com/questions/46363048/onaudioprocess-not-called-on-ios11#46534088
+                    excludeIOS11: true
+                },
+                fonts: {
+                    swfContainerId: 'fingerprintjs2',
+                    swfPath: 'flash/compiled/FontList.swf',
+                    userDefinedFonts: [],
+                    extendedJsFonts: false
+                },
+                screen: {
+                    // To ensure consistent fingerprints when users rotate their mobile devices
+                    detectScreenOrientation: true
+                },
+                plugins: {
+                    sortPluginsFor: [/palemoon/i],
+                    excludeIE: false
+                },
+                extraComponents: [],
+                excludes: {
+                    // Unreliable on Windows, see https://github.com/Valve/fingerprintjs2/issues/375
+                    enumerateDevices: true,
+                    // devicePixelRatio depends on browser zoom, and it's impossible to detect browser zoom
+                    pixelRatio: true,
+                    // DNT depends on incognito mode for some browsers (Chrome) and it's impossible to detect incognito mode
+                    doNotTrack: true,
+                    // uses js fonts already
+                    fontsFlash: true
+                },
+                NOT_AVAILABLE: 'not available',
+                ERROR: 'error',
+                EXCLUDED: 'excluded'
+            }
+
+            var each = function (obj, iterator) {
+                if (Array.prototype.forEach && obj.forEach === Array.prototype.forEach) {
+                    obj.forEach(iterator)
+                } else if (obj.length === +obj.length) {
+                    for (var i = 0, l = obj.length; i < l; i++) {
+                        iterator(obj[i], i, obj)
+                    }
+                } else {
+                    for (var key in obj) {
+                        if (obj.hasOwnProperty(key)) {
+                            iterator(obj[key], key, obj)
+                        }
+                    }
+                }
+            }
+
+            var map = function (obj, iterator) {
+                var results = []
+                // Not using strict equality so that this acts as a
+                // shortcut to checking for `null` and `undefined`.
+                if (obj == null) {
+                    return results
+                }
+                if (Array.prototype.map && obj.map === Array.prototype.map) {
+                    return obj.map(iterator)
+                }
+                each(obj, function (value, index, list) {
+                    results.push(iterator(value, index, list))
+                })
+                return results
+            }
+
+            var extendSoft = function (target, source) {
+                if (source == null) {
+                    return target
+                }
+                var value
+                var key
+                for (key in source) {
+                    value = source[key]
+                    if (value != null && !Object.prototype.hasOwnProperty.call(target, key)) {
+                        target[key] = value
+                    }
+                }
+                return target
+            }
+
+            // https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/enumerateDevices
+            var enumerateDevicesKey = function (done, options) {
+                if (!isEnumerateDevicesSupported()) {
+                    return done(options.NOT_AVAILABLE)
+                }
+                navigator.mediaDevices
+                    .enumerateDevices()
+                    .then(function (devices) {
+                        done(
+                            devices.map(function (device) {
+                                return (
+                                    'id=' +
+                                    device.deviceId +
+                                    ';gid=' +
+                                    device.groupId +
+                                    ';' +
+                                    device.kind +
+                                    ';' +
+                                    device.label
+                                )
+                            })
+                        )
+                    })
+                    ['catch'](function (error) {
+                        done(error)
+                    })
+            }
+
+            var isEnumerateDevicesSupported = function () {
+                return navigator.mediaDevices && navigator.mediaDevices.enumerateDevices
+            }
+            // Inspired by and based on https://github.com/cozylife/audio-fingerprint
+            var audioKey = function (done, options) {
+                var audioOptions = options.audio
+                if (audioOptions.excludeIOS11 && navigator.userAgent.match(/OS 11.+Version\/11.+Safari/)) {
+                    // See comment for excludeUserAgent and https://stackoverflow.com/questions/46363048/onaudioprocess-not-called-on-ios11#46534088
+                    return done(options.EXCLUDED)
+                }
+
+                var AudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext
+
+                if (AudioContext == null) {
+                    return done(options.NOT_AVAILABLE)
+                }
+
+                var context = new AudioContext(1, 44100, 44100)
+
+                var oscillator = context.createOscillator()
+                oscillator.type = 'triangle'
+                oscillator.frequency.setValueAtTime(10000, context.currentTime)
+
+                var compressor = context.createDynamicsCompressor()
+                each(
+                    [
+                        ['threshold', -50],
+                        ['knee', 40],
+                        ['ratio', 12],
+                        ['reduction', -20],
+                        ['attack', 0],
+                        ['release', 0.25]
+                    ],
+                    function (item) {
+                        if (
+                            compressor[item[0]] !== undefined &&
+                            typeof compressor[item[0]].setValueAtTime === 'function'
+                        ) {
+                            compressor[item[0]].setValueAtTime(item[1], context.currentTime)
+                        }
+                    }
+                )
+
+                oscillator.connect(compressor)
+                compressor.connect(context.destination)
+                oscillator.start(0)
+                context.startRendering()
+
+                var audioTimeoutId = setTimeout(function () {
+                    console.warn(
+                        'Audio fingerprint timed out. Please report bug at https://github.com/Valve/fingerprintjs2 with your user agent: "' +
+                            navigator.userAgent +
+                            '".'
+                    )
+                    context.oncomplete = function () {}
+                    context = null
+                    return done('audioTimeout')
+                }, audioOptions.timeout)
+
+                context.oncomplete = function (event) {
+                    var fingerprint
+                    try {
+                        clearTimeout(audioTimeoutId)
+                        fingerprint = event.renderedBuffer
+                            .getChannelData(0)
+                            .slice(4500, 5000)
+                            .reduce(function (acc, val) {
+                                return acc + Math.abs(val)
+                            }, 0)
+                            .toString()
+                        oscillator.disconnect()
+                        compressor.disconnect()
+                    } catch (error) {
+                        done(error)
+                        return
+                    }
+                    done(fingerprint)
+                }
+            }
+            var UserAgent = function (done) {
+                done(navigator.userAgent)
+            }
+            var webdriver = function (done, options) {
+                done(navigator.webdriver == null ? options.NOT_AVAILABLE : navigator.webdriver)
+            }
+            var languageKey = function (done, options) {
+                done(
+                    navigator.language ||
+                        navigator.userLanguage ||
+                        navigator.browserLanguage ||
+                        navigator.systemLanguage ||
+                        options.NOT_AVAILABLE
+                )
+            }
+            var colorDepthKey = function (done, options) {
+                done(window.screen.colorDepth || options.NOT_AVAILABLE)
+            }
+            var deviceMemoryKey = function (done, options) {
+                done(navigator.deviceMemory || options.NOT_AVAILABLE)
+            }
+            var pixelRatioKey = function (done, options) {
+                done(window.devicePixelRatio || options.NOT_AVAILABLE)
+            }
+            var screenResolutionKey = function (done, options) {
+                done(getScreenResolution(options))
+            }
+            var getScreenResolution = function (options) {
+                var resolution = [window.screen.width, window.screen.height]
+                if (options.screen.detectScreenOrientation) {
+                    resolution.sort().reverse()
+                }
+                return resolution
+            }
+            var availableScreenResolutionKey = function (done, options) {
+                done(getAvailableScreenResolution(options))
+            }
+            var getAvailableScreenResolution = function (options) {
+                if (window.screen.availWidth && window.screen.availHeight) {
+                    var available = [window.screen.availHeight, window.screen.availWidth]
+                    if (options.screen.detectScreenOrientation) {
+                        available.sort().reverse()
+                    }
+                    return available
+                }
+                // headless browsers
+                return options.NOT_AVAILABLE
+            }
+            var timezoneOffset = function (done) {
+                done(new Date().getTimezoneOffset())
+            }
+            var timezone = function (done, options) {
+                if (window.Intl && window.Intl.DateTimeFormat) {
+                    done(new window.Intl.DateTimeFormat().resolvedOptions().timeZone)
+                    return
+                }
+                done(options.NOT_AVAILABLE)
+            }
+            var sessionStorageKey = function (done, options) {
+                done(hasSessionStorage(options))
+            }
+            var localStorageKey = function (done, options) {
+                done(hasLocalStorage(options))
+            }
+            var indexedDbKey = function (done, options) {
+                done(hasIndexedDB(options))
+            }
+            var addBehaviorKey = function (done) {
+                // body might not be defined at this point or removed programmatically
+                done(!!(document.body && document.body.addBehavior))
+            }
+            var openDatabaseKey = function (done) {
+                done(!!window.openDatabase)
+            }
+            var cpuClassKey = function (done, options) {
+                done(getNavigatorCpuClass(options))
+            }
+            var platformKey = function (done, options) {
+                done(getNavigatorPlatform(options))
+            }
+            var doNotTrackKey = function (done, options) {
+                done(getDoNotTrack(options))
+            }
+            var canvasKey = function (done, options) {
+                if (isCanvasSupported()) {
+                    done(getCanvasFp(options))
+                    return
+                }
+                done(options.NOT_AVAILABLE)
+            }
+            var webglKey = function (done, options) {
+                if (isWebGlSupported()) {
+                    done(getWebglFp())
+                    return
+                }
+                done(options.NOT_AVAILABLE)
+            }
+            var webglVendorAndRendererKey = function (done) {
+                if (isWebGlSupported()) {
+                    done(getWebglVendorAndRenderer())
+                    return
+                }
+                done()
+            }
+            var adBlockKey = function (done) {
+                done(getAdBlock())
+            }
+            var hasLiedLanguagesKey = function (done) {
+                done(getHasLiedLanguages())
+            }
+            var hasLiedResolutionKey = function (done) {
+                done(getHasLiedResolution())
+            }
+            var hasLiedOsKey = function (done) {
+                done(getHasLiedOs())
+            }
+            var hasLiedBrowserKey = function (done) {
+                done(getHasLiedBrowser())
+            }
+            // flash fonts (will increase fingerprinting time 20X to ~ 130-150ms)
+            var flashFontsKey = function (done, options) {
+                // we do flash if swfobject is loaded
+                if (!hasSwfObjectLoaded()) {
+                    return done('swf object not loaded')
+                }
+                if (!hasMinFlashInstalled()) {
+                    return done('flash not installed')
+                }
+                if (!options.fonts.swfPath) {
+                    return done('missing options.fonts.swfPath')
+                }
+                loadSwfAndDetectFonts(function (fonts) {
+                    done(fonts)
+                }, options)
+            }
+            // kudos to http://www.lalit.org/lab/javascript-css-font-detect/
+            var jsFontsKey = function (done, options) {
+                // a font will be compared against all the three default fonts.
+                // and if it doesn't match all 3 then that font is not available.
+                var baseFonts = ['monospace', 'sans-serif', 'serif']
+
+                var fontList = [
+                    'Andale Mono',
+                    'Arial',
+                    'Arial Black',
+                    'Arial Hebrew',
+                    'Arial MT',
+                    'Arial Narrow',
+                    'Arial Rounded MT Bold',
+                    'Arial Unicode MS',
+                    'Bitstream Vera Sans Mono',
+                    'Book Antiqua',
+                    'Bookman Old Style',
+                    'Calibri',
+                    'Cambria',
+                    'Cambria Math',
+                    'Century',
+                    'Century Gothic',
+                    'Century Schoolbook',
+                    'Comic Sans',
+                    'Comic Sans MS',
+                    'Consolas',
+                    'Courier',
+                    'Courier New',
+                    'Geneva',
+                    'Georgia',
+                    'Helvetica',
+                    'Helvetica Neue',
+                    'Impact',
+                    'Lucida Bright',
+                    'Lucida Calligraphy',
+                    'Lucida Console',
+                    'Lucida Fax',
+                    'LUCIDA GRANDE',
+                    'Lucida Handwriting',
+                    'Lucida Sans',
+                    'Lucida Sans Typewriter',
+                    'Lucida Sans Unicode',
+                    'Microsoft Sans Serif',
+                    'Monaco',
+                    'Monotype Corsiva',
+                    'MS Gothic',
+                    'MS Outlook',
+                    'MS PGothic',
+                    'MS Reference Sans Serif',
+                    'MS Sans Serif',
+                    'MS Serif',
+                    'MYRIAD',
+                    'MYRIAD PRO',
+                    'Palatino',
+                    'Palatino Linotype',
+                    'Segoe Print',
+                    'Segoe Script',
+                    'Segoe UI',
+                    'Segoe UI Light',
+                    'Segoe UI Semibold',
+                    'Segoe UI Symbol',
+                    'Tahoma',
+                    'Times',
+                    'Times New Roman',
+                    'Times New Roman PS',
+                    'Trebuchet MS',
+                    'Verdana',
+                    'Wingdings',
+                    'Wingdings 2',
+                    'Wingdings 3'
+                ]
+
+                if (options.fonts.extendedJsFonts) {
+                    var extendedFontList = [
+                        'Abadi MT Condensed Light',
+                        'Academy Engraved LET',
+                        'ADOBE CASLON PRO',
+                        'Adobe Garamond',
+                        'ADOBE GARAMOND PRO',
+                        'Agency FB',
+                        'Aharoni',
+                        'Albertus Extra Bold',
+                        'Albertus Medium',
+                        'Algerian',
+                        'Amazone BT',
+                        'American Typewriter',
+                        'American Typewriter Condensed',
+                        'AmerType Md BT',
+                        'Andalus',
+                        'Angsana New',
+                        'AngsanaUPC',
+                        'Antique Olive',
+                        'Aparajita',
+                        'Apple Chancery',
+                        'Apple Color Emoji',
+                        'Apple SD Gothic Neo',
+                        'Arabic Typesetting',
+                        'ARCHER',
+                        'ARNO PRO',
+                        'Arrus BT',
+                        'Aurora Cn BT',
+                        'AvantGarde Bk BT',
+                        'AvantGarde Md BT',
+                        'AVENIR',
+                        'Ayuthaya',
+                        'Bandy',
+                        'Bangla Sangam MN',
+                        'Bank Gothic',
+                        'BankGothic Md BT',
+                        'Baskerville',
+                        'Baskerville Old Face',
+                        'Batang',
+                        'BatangChe',
+                        'Bauer Bodoni',
+                        'Bauhaus 93',
+                        'Bazooka',
+                        'Bell MT',
+                        'Bembo',
+                        'Benguiat Bk BT',
+                        'Berlin Sans FB',
+                        'Berlin Sans FB Demi',
+                        'Bernard MT Condensed',
+                        'BernhardFashion BT',
+                        'BernhardMod BT',
+                        'Big Caslon',
+                        'BinnerD',
+                        'Blackadder ITC',
+                        'BlairMdITC TT',
+                        'Bodoni 72',
+                        'Bodoni 72 Oldstyle',
+                        'Bodoni 72 Smallcaps',
+                        'Bodoni MT',
+                        'Bodoni MT Black',
+                        'Bodoni MT Condensed',
+                        'Bodoni MT Poster Compressed',
+                        'Bookshelf Symbol 7',
+                        'Boulder',
+                        'Bradley Hand',
+                        'Bradley Hand ITC',
+                        'Bremen Bd BT',
+                        'Britannic Bold',
+                        'Broadway',
+                        'Browallia New',
+                        'BrowalliaUPC',
+                        'Brush Script MT',
+                        'Californian FB',
+                        'Calisto MT',
+                        'Calligrapher',
+                        'Candara',
+                        'CaslonOpnface BT',
+                        'Castellar',
+                        'Centaur',
+                        'Cezanne',
+                        'CG Omega',
+                        'CG Times',
+                        'Chalkboard',
+                        'Chalkboard SE',
+                        'Chalkduster',
+                        'Charlesworth',
+                        'Charter Bd BT',
+                        'Charter BT',
+                        'Chaucer',
+                        'ChelthmITC Bk BT',
+                        'Chiller',
+                        'Clarendon',
+                        'Clarendon Condensed',
+                        'CloisterBlack BT',
+                        'Cochin',
+                        'Colonna MT',
+                        'Constantia',
+                        'Cooper Black',
+                        'Copperplate',
+                        'Copperplate Gothic',
+                        'Copperplate Gothic Bold',
+                        'Copperplate Gothic Light',
+                        'CopperplGoth Bd BT',
+                        'Corbel',
+                        'Cordia New',
+                        'CordiaUPC',
+                        'Cornerstone',
+                        'Coronet',
+                        'Cuckoo',
+                        'Curlz MT',
+                        'DaunPenh',
+                        'Dauphin',
+                        'David',
+                        'DB LCD Temp',
+                        'DELICIOUS',
+                        'Denmark',
+                        'DFKai-SB',
+                        'Didot',
+                        'DilleniaUPC',
+                        'DIN',
+                        'DokChampa',
+                        'Dotum',
+                        'DotumChe',
+                        'Ebrima',
+                        'Edwardian Script ITC',
+                        'Elephant',
+                        'English 111 Vivace BT',
+                        'Engravers MT',
+                        'EngraversGothic BT',
+                        'Eras Bold ITC',
+                        'Eras Demi ITC',
+                        'Eras Light ITC',
+                        'Eras Medium ITC',
+                        'EucrosiaUPC',
+                        'Euphemia',
+                        'Euphemia UCAS',
+                        'EUROSTILE',
+                        'Exotc350 Bd BT',
+                        'FangSong',
+                        'Felix Titling',
+                        'Fixedsys',
+                        'FONTIN',
+                        'Footlight MT Light',
+                        'Forte',
+                        'FrankRuehl',
+                        'Fransiscan',
+                        'Freefrm721 Blk BT',
+                        'FreesiaUPC',
+                        'Freestyle Script',
+                        'French Script MT',
+                        'FrnkGothITC Bk BT',
+                        'Fruitger',
+                        'FRUTIGER',
+                        'Futura',
+                        'Futura Bk BT',
+                        'Futura Lt BT',
+                        'Futura Md BT',
+                        'Futura ZBlk BT',
+                        'FuturaBlack BT',
+                        'Gabriola',
+                        'Galliard BT',
+                        'Gautami',
+                        'Geeza Pro',
+                        'Geometr231 BT',
+                        'Geometr231 Hv BT',
+                        'Geometr231 Lt BT',
+                        'GeoSlab 703 Lt BT',
+                        'GeoSlab 703 XBd BT',
+                        'Gigi',
+                        'Gill Sans',
+                        'Gill Sans MT',
+                        'Gill Sans MT Condensed',
+                        'Gill Sans MT Ext Condensed Bold',
+                        'Gill Sans Ultra Bold',
+                        'Gill Sans Ultra Bold Condensed',
+                        'Gisha',
+                        'Gloucester MT Extra Condensed',
+                        'GOTHAM',
+                        'GOTHAM BOLD',
+                        'Goudy Old Style',
+                        'Goudy Stout',
+                        'GoudyHandtooled BT',
+                        'GoudyOLSt BT',
+                        'Gujarati Sangam MN',
+                        'Gulim',
+                        'GulimChe',
+                        'Gungsuh',
+                        'GungsuhChe',
+                        'Gurmukhi MN',
+                        'Haettenschweiler',
+                        'Harlow Solid Italic',
+                        'Harrington',
+                        'Heather',
+                        'Heiti SC',
+                        'Heiti TC',
+                        'HELV',
+                        'Herald',
+                        'High Tower Text',
+                        'Hiragino Kaku Gothic ProN',
+                        'Hiragino Mincho ProN',
+                        'Hoefler Text',
+                        'Humanst 521 Cn BT',
+                        'Humanst521 BT',
+                        'Humanst521 Lt BT',
+                        'Imprint MT Shadow',
+                        'Incised901 Bd BT',
+                        'Incised901 BT',
+                        'Incised901 Lt BT',
+                        'INCONSOLATA',
+                        'Informal Roman',
+                        'Informal011 BT',
+                        'INTERSTATE',
+                        'IrisUPC',
+                        'Iskoola Pota',
+                        'JasmineUPC',
+                        'Jazz LET',
+                        'Jenson',
+                        'Jester',
+                        'Jokerman',
+                        'Juice ITC',
+                        'Kabel Bk BT',
+                        'Kabel Ult BT',
+                        'Kailasa',
+                        'KaiTi',
+                        'Kalinga',
+                        'Kannada Sangam MN',
+                        'Kartika',
+                        'Kaufmann Bd BT',
+                        'Kaufmann BT',
+                        'Khmer UI',
+                        'KodchiangUPC',
+                        'Kokila',
+                        'Korinna BT',
+                        'Kristen ITC',
+                        'Krungthep',
+                        'Kunstler Script',
+                        'Lao UI',
+                        'Latha',
+                        'Leelawadee',
+                        'Letter Gothic',
+                        'Levenim MT',
+                        'LilyUPC',
+                        'Lithograph',
+                        'Lithograph Light',
+                        'Long Island',
+                        'Lydian BT',
+                        'Magneto',
+                        'Maiandra GD',
+                        'Malayalam Sangam MN',
+                        'Malgun Gothic',
+                        'Mangal',
+                        'Marigold',
+                        'Marion',
+                        'Marker Felt',
+                        'Market',
+                        'Marlett',
+                        'Matisse ITC',
+                        'Matura MT Script Capitals',
+                        'Meiryo',
+                        'Meiryo UI',
+                        'Microsoft Himalaya',
+                        'Microsoft JhengHei',
+                        'Microsoft New Tai Lue',
+                        'Microsoft PhagsPa',
+                        'Microsoft Tai Le',
+                        'Microsoft Uighur',
+                        'Microsoft YaHei',
+                        'Microsoft Yi Baiti',
+                        'MingLiU',
+                        'MingLiU_HKSCS',
+                        'MingLiU_HKSCS-ExtB',
+                        'MingLiU-ExtB',
+                        'Minion',
+                        'Minion Pro',
+                        'Miriam',
+                        'Miriam Fixed',
+                        'Mistral',
+                        'Modern',
+                        'Modern No. 20',
+                        'Mona Lisa Solid ITC TT',
+                        'Mongolian Baiti',
+                        'MONO',
+                        'MoolBoran',
+                        'Mrs Eaves',
+                        'MS LineDraw',
+                        'MS Mincho',
+                        'MS PMincho',
+                        'MS Reference Specialty',
+                        'MS UI Gothic',
+                        'MT Extra',
+                        'MUSEO',
+                        'MV Boli',
+                        'Nadeem',
+                        'Narkisim',
+                        'NEVIS',
+                        'News Gothic',
+                        'News GothicMT',
+                        'NewsGoth BT',
+                        'Niagara Engraved',
+                        'Niagara Solid',
+                        'Noteworthy',
+                        'NSimSun',
+                        'Nyala',
+                        'OCR A Extended',
+                        'Old Century',
+                        'Old English Text MT',
+                        'Onyx',
+                        'Onyx BT',
+                        'OPTIMA',
+                        'Oriya Sangam MN',
+                        'OSAKA',
+                        'OzHandicraft BT',
+                        'Palace Script MT',
+                        'Papyrus',
+                        'Parchment',
+                        'Party LET',
+                        'Pegasus',
+                        'Perpetua',
+                        'Perpetua Titling MT',
+                        'PetitaBold',
+                        'Pickwick',
+                        'Plantagenet Cherokee',
+                        'Playbill',
+                        'PMingLiU',
+                        'PMingLiU-ExtB',
+                        'Poor Richard',
+                        'Poster',
+                        'PosterBodoni BT',
+                        'PRINCETOWN LET',
+                        'Pristina',
+                        'PTBarnum BT',
+                        'Pythagoras',
+                        'Raavi',
+                        'Rage Italic',
+                        'Ravie',
+                        'Ribbon131 Bd BT',
+                        'Rockwell',
+                        'Rockwell Condensed',
+                        'Rockwell Extra Bold',
+                        'Rod',
+                        'Roman',
+                        'Sakkal Majalla',
+                        'Santa Fe LET',
+                        'Savoye LET',
+                        'Sceptre',
+                        'Script',
+                        'Script MT Bold',
+                        'SCRIPTINA',
+                        'Serifa',
+                        'Serifa BT',
+                        'Serifa Th BT',
+                        'ShelleyVolante BT',
+                        'Sherwood',
+                        'Shonar Bangla',
+                        'Showcard Gothic',
+                        'Shruti',
+                        'Signboard',
+                        'SILKSCREEN',
+                        'SimHei',
+                        'Simplified Arabic',
+                        'Simplified Arabic Fixed',
+                        'SimSun',
+                        'SimSun-ExtB',
+                        'Sinhala Sangam MN',
+                        'Sketch Rockwell',
+                        'Skia',
+                        'Small Fonts',
+                        'Snap ITC',
+                        'Snell Roundhand',
+                        'Socket',
+                        'Souvenir Lt BT',
+                        'Staccato222 BT',
+                        'Steamer',
+                        'Stencil',
+                        'Storybook',
+                        'Styllo',
+                        'Subway',
+                        'Swis721 BlkEx BT',
+                        'Swiss911 XCm BT',
+                        'Sylfaen',
+                        'Synchro LET',
+                        'System',
+                        'Tamil Sangam MN',
+                        'Technical',
+                        'Teletype',
+                        'Telugu Sangam MN',
+                        'Tempus Sans ITC',
+                        'Terminal',
+                        'Thonburi',
+                        'Traditional Arabic',
+                        'Trajan',
+                        'TRAJAN PRO',
+                        'Tristan',
+                        'Tubular',
+                        'Tunga',
+                        'Tw Cen MT',
+                        'Tw Cen MT Condensed',
+                        'Tw Cen MT Condensed Extra Bold',
+                        'TypoUpright BT',
+                        'Unicorn',
+                        'Univers',
+                        'Univers CE 55 Medium',
+                        'Univers Condensed',
+                        'Utsaah',
+                        'Vagabond',
+                        'Vani',
+                        'Vijaya',
+                        'Viner Hand ITC',
+                        'VisualUI',
+                        'Vivaldi',
+                        'Vladimir Script',
+                        'Vrinda',
+                        'Westminster',
+                        'WHITNEY',
+                        'Wide Latin',
+                        'ZapfEllipt BT',
+                        'ZapfHumnst BT',
+                        'ZapfHumnst Dm BT',
+                        'Zapfino',
+                        'Zurich BlkEx BT',
+                        'Zurich Ex BT',
+                        'ZWAdobeF'
+                    ]
+                    fontList = fontList.concat(extendedFontList)
+                }
+
+                fontList = fontList.concat(options.fonts.userDefinedFonts)
+
+                // remove duplicate fonts
+                fontList = fontList.filter(function (font, position) {
+                    return fontList.indexOf(font) === position
+                })
+
+                // we use m or w because these two characters take up the maximum width.
+                // And we use a LLi so that the same matching fonts can get separated
+                var testString = 'mmmmmmmmmmlli'
+
+                // we test using 72px font size, we may use any size. I guess larger the better.
+                var testSize = '72px'
+
+                var h = document.getElementsByTagName('body')[0]
+
+                // div to load spans for the base fonts
+                var baseFontsDiv = document.createElement('div')
+
+                // div to load spans for the fonts to detect
+                var fontsDiv = document.createElement('div')
+
+                var defaultWidth = {}
+                var defaultHeight = {}
+
+                // creates a span where the fonts will be loaded
+                var createSpan = function () {
+                    var s = document.createElement('span')
+                    /*
+                     * We need this css as in some weird browser this
+                     * span elements shows up for a microSec which creates a
+                     * bad user experience
+                     */
+                    s.style.position = 'absolute'
+                    s.style.left = '-9999px'
+                    s.style.fontSize = testSize
+
+                    // css font reset to reset external styles
+                    s.style.fontStyle = 'normal'
+                    s.style.fontWeight = 'normal'
+                    s.style.letterSpacing = 'normal'
+                    s.style.lineBreak = 'auto'
+                    s.style.lineHeight = 'normal'
+                    s.style.textTransform = 'none'
+                    s.style.textAlign = 'left'
+                    s.style.textDecoration = 'none'
+                    s.style.textShadow = 'none'
+                    s.style.whiteSpace = 'normal'
+                    s.style.wordBreak = 'normal'
+                    s.style.wordSpacing = 'normal'
+
+                    s.innerHTML = testString
+                    return s
+                }
+
+                // creates a span and load the font to detect and a base font for fallback
+                var createSpanWithFonts = function (fontToDetect, baseFont) {
+                    var s = createSpan()
+                    s.style.fontFamily = "'" + fontToDetect + "'," + baseFont
+                    return s
+                }
+
+                // creates spans for the base fonts and adds them to baseFontsDiv
+                var initializeBaseFontsSpans = function () {
+                    var spans = []
+                    for (var index = 0, length = baseFonts.length; index < length; index++) {
+                        var s = createSpan()
+                        s.style.fontFamily = baseFonts[index]
+                        baseFontsDiv.appendChild(s)
+                        spans.push(s)
+                    }
+                    return spans
+                }
+
+                // creates spans for the fonts to detect and adds them to fontsDiv
+                var initializeFontsSpans = function () {
+                    var spans = {}
+                    for (var i = 0, l = fontList.length; i < l; i++) {
+                        var fontSpans = []
+                        for (var j = 0, numDefaultFonts = baseFonts.length; j < numDefaultFonts; j++) {
+                            var s = createSpanWithFonts(fontList[i], baseFonts[j])
+                            fontsDiv.appendChild(s)
+                            fontSpans.push(s)
+                        }
+                        spans[fontList[i]] = fontSpans // Stores {fontName : [spans for that font]}
+                    }
+                    return spans
+                }
+
+                // checks if a font is available
+                var isFontAvailable = function (fontSpans) {
+                    var detected = false
+                    for (var i = 0; i < baseFonts.length; i++) {
+                        detected =
+                            fontSpans[i].offsetWidth !== defaultWidth[baseFonts[i]] ||
+                            fontSpans[i].offsetHeight !== defaultHeight[baseFonts[i]]
+                        if (detected) {
+                            return detected
+                        }
+                    }
+                    return detected
+                }
+
+                // create spans for base fonts
+                var baseFontsSpans = initializeBaseFontsSpans()
+
+                // add the spans to the DOM
+                h.appendChild(baseFontsDiv)
+
+                // get the default width for the three base fonts
+                for (var index = 0, length = baseFonts.length; index < length; index++) {
+                    defaultWidth[baseFonts[index]] = baseFontsSpans[index].offsetWidth // width for the default font
+                    defaultHeight[baseFonts[index]] = baseFontsSpans[index].offsetHeight // height for the default font
+                }
+
+                // create spans for fonts to detect
+                var fontsSpans = initializeFontsSpans()
+
+                // add all the spans to the DOM
+                h.appendChild(fontsDiv)
+
+                // check available fonts
+                var available = []
+                for (var i = 0, l = fontList.length; i < l; i++) {
+                    if (isFontAvailable(fontsSpans[fontList[i]])) {
+                        available.push(fontList[i])
+                    }
+                }
+
+                // remove spans from DOM
+                h.removeChild(fontsDiv)
+                h.removeChild(baseFontsDiv)
+                done(available)
+            }
+            var pluginsComponent = function (done, options) {
+                if (isIE()) {
+                    if (!options.plugins.excludeIE) {
+                        done(getIEPlugins(options))
+                    } else {
+                        done(options.EXCLUDED)
+                    }
+                } else {
+                    done(getRegularPlugins(options))
+                }
+            }
+            var getRegularPlugins = function (options) {
+                if (navigator.plugins == null) {
+                    return options.NOT_AVAILABLE
+                }
+
+                var plugins = []
+                // plugins isn't defined in Node envs.
+                for (var i = 0, l = navigator.plugins.length; i < l; i++) {
+                    if (navigator.plugins[i]) {
+                        plugins.push(navigator.plugins[i])
+                    }
+                }
+
+                // sorting plugins only for those user agents, that we know randomize the plugins
+                // every time we try to enumerate them
+                if (pluginsShouldBeSorted(options)) {
+                    plugins = plugins.sort(function (a, b) {
+                        if (a.name > b.name) {
+                            return 1
+                        }
+                        if (a.name < b.name) {
+                            return -1
+                        }
+                        return 0
+                    })
+                }
+                return map(plugins, function (p) {
+                    var mimeTypes = map(p, function (mt) {
+                        return [mt.type, mt.suffixes]
+                    })
+                    return [p.name, p.description, mimeTypes]
+                })
+            }
+            var getIEPlugins = function (options) {
+                var result = []
+                if (
+                    (Object.getOwnPropertyDescriptor && Object.getOwnPropertyDescriptor(window, 'ActiveXObject')) ||
+                    'ActiveXObject' in window
+                ) {
+                    var names = [
+                        'AcroPDF.PDF', // Adobe PDF reader 7+
+                        'Adodb.Stream',
+                        'AgControl.AgControl', // Silverlight
+                        'DevalVRXCtrl.DevalVRXCtrl.1',
+                        'MacromediaFlashPaper.MacromediaFlashPaper',
+                        'Msxml2.DOMDocument',
+                        'Msxml2.XMLHTTP',
+                        'PDF.PdfCtrl', // Adobe PDF reader 6 and earlier, brrr
+                        'QuickTime.QuickTime', // QuickTime
+                        'QuickTimeCheckObject.QuickTimeCheck.1',
+                        'RealPlayer',
+                        'RealPlayer.RealPlayer(tm) ActiveX Control (32-bit)',
+                        'RealVideo.RealVideo(tm) ActiveX Control (32-bit)',
+                        'Scripting.Dictionary',
+                        'SWCtl.SWCtl', // ShockWave player
+                        'Shell.UIHelper',
+                        'ShockwaveFlash.ShockwaveFlash', // flash plugin
+                        'Skype.Detection',
+                        'TDCCtl.TDCCtl',
+                        'WMPlayer.OCX', // Windows media player
+                        'rmocx.RealPlayer G2 Control',
+                        'rmocx.RealPlayer G2 Control.1'
+                    ]
+                    // starting to detect plugins in IE
+                    result = map(names, function (name) {
+                        try {
+                            // eslint-disable-next-line no-new
+                            new window.ActiveXObject(name)
+                            return name
+                        } catch (e) {
+                            return options.ERROR
+                        }
+                    })
+                } else {
+                    result.push(options.NOT_AVAILABLE)
+                }
+                if (navigator.plugins) {
+                    result = result.concat(getRegularPlugins(options))
+                }
+                return result
+            }
+            var pluginsShouldBeSorted = function (options) {
+                var should = false
+                for (var i = 0, l = options.plugins.sortPluginsFor.length; i < l; i++) {
+                    var re = options.plugins.sortPluginsFor[i]
+                    if (navigator.userAgent.match(re)) {
+                        should = true
+                        break
+                    }
+                }
+                return should
+            }
+            var touchSupportKey = function (done) {
+                done(getTouchSupport())
+            }
+            var hardwareConcurrencyKey = function (done, options) {
+                done(getHardwareConcurrency(options))
+            }
+            var hasSessionStorage = function (options) {
+                try {
+                    return !!window.sessionStorage
+                } catch (e) {
+                    return options.ERROR // SecurityError when referencing it means it exists
+                }
+            }
+
+            // https://bugzilla.mozilla.org/show_bug.cgi?id=781447
+            var hasLocalStorage = function (options) {
+                try {
+                    return !!window.localStorage
+                } catch (e) {
+                    return options.ERROR // SecurityError when referencing it means it exists
+                }
+            }
+            var hasIndexedDB = function (options) {
+                try {
+                    return !!window.indexedDB
+                } catch (e) {
+                    return options.ERROR // SecurityError when referencing it means it exists
+                }
+            }
+            var getHardwareConcurrency = function (options) {
+                if (navigator.hardwareConcurrency) {
+                    return navigator.hardwareConcurrency
+                }
+                return options.NOT_AVAILABLE
+            }
+            var getNavigatorCpuClass = function (options) {
+                return navigator.cpuClass || options.NOT_AVAILABLE
+            }
+            var getNavigatorPlatform = function (options) {
+                if (navigator.platform) {
+                    return navigator.platform
+                } else {
+                    return options.NOT_AVAILABLE
+                }
+            }
+            var getDoNotTrack = function (options) {
+                if (navigator.doNotTrack) {
+                    return navigator.doNotTrack
+                } else if (navigator.msDoNotTrack) {
+                    return navigator.msDoNotTrack
+                } else if (window.doNotTrack) {
+                    return window.doNotTrack
+                } else {
+                    return options.NOT_AVAILABLE
+                }
+            }
+            // This is a crude and primitive touch screen detection.
+            // It's not possible to currently reliably detect the  availability of a touch screen
+            // with a JS, without actually subscribing to a touch event.
+            // http://www.stucox.com/blog/you-cant-detect-a-touchscreen/
+            // https://github.com/Modernizr/Modernizr/issues/548
+            // method returns an array of 3 values:
+            // maxTouchPoints, the success or failure of creating a TouchEvent,
+            // and the availability of the 'ontouchstart' property
+
+            var getTouchSupport = function () {
+                var maxTouchPoints = 0
+                var touchEvent
+                if (typeof navigator.maxTouchPoints !== 'undefined') {
+                    maxTouchPoints = navigator.maxTouchPoints
+                } else if (typeof navigator.msMaxTouchPoints !== 'undefined') {
+                    maxTouchPoints = navigator.msMaxTouchPoints
+                }
+                try {
+                    document.createEvent('TouchEvent')
+                    touchEvent = true
+                } catch (_) {
+                    touchEvent = false
+                }
+                var touchStart = 'ontouchstart' in window
+                return [maxTouchPoints, touchEvent, touchStart]
+            }
+            // https://www.browserleaks.com/canvas#how-does-it-work
+
+            var getCanvasFp = function (options) {
+                var result = []
+                // Very simple now, need to make it more complex (geo shapes etc)
+                var canvas = document.createElement('canvas')
+                canvas.width = 2000
+                canvas.height = 200
+                canvas.style.display = 'inline'
+                var ctx = canvas.getContext('2d')
+                // detect browser support of canvas winding
+                // http://blogs.adobe.com/webplatform/2013/01/30/winding-rules-in-canvas/
+                // https://github.com/Modernizr/Modernizr/blob/master/feature-detects/canvas/winding.js
+                ctx.rect(0, 0, 10, 10)
+                ctx.rect(2, 2, 6, 6)
+                result.push('canvas winding:' + (ctx.isPointInPath(5, 5, 'evenodd') === false ? 'yes' : 'no'))
+
+                ctx.textBaseline = 'alphabetic'
+                ctx.fillStyle = '#f60'
+                ctx.fillRect(125, 1, 62, 20)
+                ctx.fillStyle = '#069'
+                // https://github.com/Valve/fingerprintjs2/issues/66
+                if (options.dontUseFakeFontInCanvas) {
+                    ctx.font = '11pt Arial'
+                } else {
+                    ctx.font = '11pt no-real-font-123'
+                }
+                ctx.fillText('Cwm fjordbank glyphs vext quiz, \ud83d\ude03', 2, 15)
+                ctx.fillStyle = 'rgba(102, 204, 0, 0.2)'
+                ctx.font = '18pt Arial'
+                ctx.fillText('Cwm fjordbank glyphs vext quiz, \ud83d\ude03', 4, 45)
+
+                // canvas blending
+                // http://blogs.adobe.com/webplatform/2013/01/28/blending-features-in-canvas/
+                // http://jsfiddle.net/NDYV8/16/
+                ctx.globalCompositeOperation = 'multiply'
+                ctx.fillStyle = 'rgb(255,0,255)'
+                ctx.beginPath()
+                ctx.arc(50, 50, 50, 0, Math.PI * 2, true)
+                ctx.closePath()
+                ctx.fill()
+                ctx.fillStyle = 'rgb(0,255,255)'
+                ctx.beginPath()
+                ctx.arc(100, 50, 50, 0, Math.PI * 2, true)
+                ctx.closePath()
+                ctx.fill()
+                ctx.fillStyle = 'rgb(255,255,0)'
+                ctx.beginPath()
+                ctx.arc(75, 100, 50, 0, Math.PI * 2, true)
+                ctx.closePath()
+                ctx.fill()
+                ctx.fillStyle = 'rgb(255,0,255)'
+                // canvas winding
+                // http://blogs.adobe.com/webplatform/2013/01/30/winding-rules-in-canvas/
+                // http://jsfiddle.net/NDYV8/19/
+                ctx.arc(75, 75, 75, 0, Math.PI * 2, true)
+                ctx.arc(75, 75, 25, 0, Math.PI * 2, true)
+                ctx.fill('evenodd')
+
+                if (canvas.toDataURL) {
+                    result.push('canvas fp:' + canvas.toDataURL())
+                }
+                return result
+            }
+            var getWebglFp = function () {
+                var gl
+                var fa2s = function (fa) {
+                    gl.clearColor(0.0, 0.0, 0.0, 1.0)
+                    gl.enable(gl.DEPTH_TEST)
+                    gl.depthFunc(gl.LEQUAL)
+                    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+                    return '[' + fa[0] + ', ' + fa[1] + ']'
+                }
+                var maxAnisotropy = function (gl) {
+                    var ext =
+                        gl.getExtension('EXT_texture_filter_anisotropic') ||
+                        gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic') ||
+                        gl.getExtension('MOZ_EXT_texture_filter_anisotropic')
+                    if (ext) {
+                        var anisotropy = gl.getParameter(ext.MAX_TEXTURE_MAX_ANISOTROPY_EXT)
+                        if (anisotropy === 0) {
+                            anisotropy = 2
+                        }
+                        return anisotropy
+                    } else {
+                        return null
+                    }
+                }
+
+                gl = getWebglCanvas()
+                if (!gl) {
+                    return null
+                }
+                // WebGL fingerprinting is a combination of techniques, found in MaxMind antifraud script & Augur fingerprinting.
+                // First it draws a gradient object with shaders and convers the image to the Base64 string.
+                // Then it enumerates all WebGL extensions & capabilities and appends them to the Base64 string, resulting in a huge WebGL string, potentially very unique on each device
+                // Since iOS supports webgl starting from version 8.1 and 8.1 runs on several graphics chips, the results may be different across ios devices, but we need to verify it.
+                var result = []
+                var vShaderTemplate =
+                    'attribute vec2 attrVertex;varying vec2 varyinTexCoordinate;uniform vec2 uniformOffset;void main(){varyinTexCoordinate=attrVertex+uniformOffset;gl_Position=vec4(attrVertex,0,1);}'
+                var fShaderTemplate =
+                    'precision mediump float;varying vec2 varyinTexCoordinate;void main() {gl_FragColor=vec4(varyinTexCoordinate,0,1);}'
+                var vertexPosBuffer = gl.createBuffer()
+                gl.bindBuffer(gl.ARRAY_BUFFER, vertexPosBuffer)
+                var vertices = new Float32Array([-0.2, -0.9, 0, 0.4, -0.26, 0, 0, 0.732134444, 0])
+                gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
+                vertexPosBuffer.itemSize = 3
+                vertexPosBuffer.numItems = 3
+                var program = gl.createProgram()
+                var vshader = gl.createShader(gl.VERTEX_SHADER)
+                gl.shaderSource(vshader, vShaderTemplate)
+                gl.compileShader(vshader)
+                var fshader = gl.createShader(gl.FRAGMENT_SHADER)
+                gl.shaderSource(fshader, fShaderTemplate)
+                gl.compileShader(fshader)
+                gl.attachShader(program, vshader)
+                gl.attachShader(program, fshader)
+                gl.linkProgram(program)
+                gl.useProgram(program)
+                program.vertexPosAttrib = gl.getAttribLocation(program, 'attrVertex')
+                program.offsetUniform = gl.getUniformLocation(program, 'uniformOffset')
+                gl.enableVertexAttribArray(program.vertexPosArray)
+                gl.vertexAttribPointer(program.vertexPosAttrib, vertexPosBuffer.itemSize, gl.FLOAT, !1, 0, 0)
+                gl.uniform2f(program.offsetUniform, 1, 1)
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, vertexPosBuffer.numItems)
+                try {
+                    result.push(gl.canvas.toDataURL())
+                } catch (e) {
+                    /* .toDataURL may be absent or broken (blocked by extension) */
+                }
+                result.push('extensions:' + (gl.getSupportedExtensions() || []).join(';'))
+                result.push('webgl aliased line width range:' + fa2s(gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE)))
+                result.push('webgl aliased point size range:' + fa2s(gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)))
+                result.push('webgl alpha bits:' + gl.getParameter(gl.ALPHA_BITS))
+                result.push('webgl antialiasing:' + (gl.getContextAttributes().antialias ? 'yes' : 'no'))
+                result.push('webgl blue bits:' + gl.getParameter(gl.BLUE_BITS))
+                result.push('webgl depth bits:' + gl.getParameter(gl.DEPTH_BITS))
+                result.push('webgl green bits:' + gl.getParameter(gl.GREEN_BITS))
+                result.push('webgl max anisotropy:' + maxAnisotropy(gl))
+                result.push(
+                    'webgl max combined texture image units:' + gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS)
+                )
+                result.push('webgl max cube map texture size:' + gl.getParameter(gl.MAX_CUBE_MAP_TEXTURE_SIZE))
+                result.push('webgl max fragment uniform vectors:' + gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS))
+                result.push('webgl max render buffer size:' + gl.getParameter(gl.MAX_RENDERBUFFER_SIZE))
+                result.push('webgl max texture image units:' + gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS))
+                result.push('webgl max texture size:' + gl.getParameter(gl.MAX_TEXTURE_SIZE))
+                result.push('webgl max varying vectors:' + gl.getParameter(gl.MAX_VARYING_VECTORS))
+                result.push('webgl max vertex attribs:' + gl.getParameter(gl.MAX_VERTEX_ATTRIBS))
+                result.push(
+                    'webgl max vertex texture image units:' + gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS)
+                )
+                result.push('webgl max vertex uniform vectors:' + gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS))
+                result.push('webgl max viewport dims:' + fa2s(gl.getParameter(gl.MAX_VIEWPORT_DIMS)))
+                result.push('webgl red bits:' + gl.getParameter(gl.RED_BITS))
+                result.push('webgl renderer:' + gl.getParameter(gl.RENDERER))
+                result.push('webgl shading language version:' + gl.getParameter(gl.SHADING_LANGUAGE_VERSION))
+                result.push('webgl stencil bits:' + gl.getParameter(gl.STENCIL_BITS))
+                result.push('webgl vendor:' + gl.getParameter(gl.VENDOR))
+                result.push('webgl version:' + gl.getParameter(gl.VERSION))
+
+                try {
+                    // Add the unmasked vendor and unmasked renderer if the debug_renderer_info extension is available
+                    var extensionDebugRendererInfo = gl.getExtension('WEBGL_debug_renderer_info')
+                    if (extensionDebugRendererInfo) {
+                        result.push(
+                            'webgl unmasked vendor:' + gl.getParameter(extensionDebugRendererInfo.UNMASKED_VENDOR_WEBGL)
+                        )
+                        result.push(
+                            'webgl unmasked renderer:' +
+                                gl.getParameter(extensionDebugRendererInfo.UNMASKED_RENDERER_WEBGL)
+                        )
+                    }
+                } catch (e) {
+                    /* squelch */
+                }
+
+                if (!gl.getShaderPrecisionFormat) {
+                    loseWebglContext(gl)
+                    return result
+                }
+
+                each(['FLOAT', 'INT'], function (numType) {
+                    each(['VERTEX', 'FRAGMENT'], function (shader) {
+                        each(['HIGH', 'MEDIUM', 'LOW'], function (numSize) {
+                            each(['precision', 'rangeMin', 'rangeMax'], function (key) {
+                                var format = gl.getShaderPrecisionFormat(
+                                    gl[shader + '_SHADER'],
+                                    gl[numSize + '_' + numType]
+                                )[key]
+                                if (key !== 'precision') {
+                                    key = 'precision ' + key
+                                }
+                                var line = [
+                                    'webgl ',
+                                    shader.toLowerCase(),
+                                    ' shader ',
+                                    numSize.toLowerCase(),
+                                    ' ',
+                                    numType.toLowerCase(),
+                                    ' ',
+                                    key,
+                                    ':',
+                                    format
+                                ].join('')
+                                result.push(line)
+                            })
+                        })
+                    })
+                })
+                loseWebglContext(gl)
+                return result
+            }
+            var getWebglVendorAndRenderer = function () {
+                /* This a subset of the WebGL fingerprint with a lot of entropy, while being reasonably browser-independent */
+                try {
+                    var glContext = getWebglCanvas()
+                    var extensionDebugRendererInfo = glContext.getExtension('WEBGL_debug_renderer_info')
+                    var params =
+                        glContext.getParameter(extensionDebugRendererInfo.UNMASKED_VENDOR_WEBGL) +
+                        '~' +
+                        glContext.getParameter(extensionDebugRendererInfo.UNMASKED_RENDERER_WEBGL)
+                    loseWebglContext(glContext)
+                    return params
+                } catch (e) {
+                    return null
+                }
+            }
+            var getAdBlock = function () {
+                var ads = document.createElement('div')
+                ads.innerHTML = '&nbsp;'
+                ads.className = 'adsbox'
+                var result = false
+                try {
+                    // body may not exist, that's why we need try/catch
+                    document.body.appendChild(ads)
+                    result = document.getElementsByClassName('adsbox')[0].offsetHeight === 0
+                    document.body.removeChild(ads)
+                } catch (e) {
+                    result = false
+                }
+                return result
+            }
+            var getHasLiedLanguages = function () {
+                // We check if navigator.language is equal to the first language of navigator.languages
+                // navigator.languages is undefined on IE11 (and potentially older IEs)
+                if (typeof navigator.languages !== 'undefined') {
+                    try {
+                        var firstLanguages = navigator.languages[0].substr(0, 2)
+                        if (firstLanguages !== navigator.language.substr(0, 2)) {
+                            return true
+                        }
+                    } catch (err) {
+                        return true
+                    }
+                }
+                return false
+            }
+            var getHasLiedResolution = function () {
+                return (
+                    window.screen.width < window.screen.availWidth || window.screen.height < window.screen.availHeight
+                )
+            }
+            var getHasLiedOs = function () {
+                var userAgent = navigator.userAgent.toLowerCase()
+                var oscpu = navigator.oscpu
+                var platform = navigator.platform.toLowerCase()
+                var os
+                // We extract the OS from the user agent (respect the order of the if else if statement)
+                if (userAgent.indexOf('windows phone') >= 0) {
+                    os = 'Windows Phone'
+                } else if (
+                    userAgent.indexOf('windows') >= 0 ||
+                    userAgent.indexOf('win16') >= 0 ||
+                    userAgent.indexOf('win32') >= 0 ||
+                    userAgent.indexOf('win64') >= 0 ||
+                    userAgent.indexOf('win95') >= 0 ||
+                    userAgent.indexOf('win98') >= 0 ||
+                    userAgent.indexOf('winnt') >= 0 ||
+                    userAgent.indexOf('wow64') >= 0
+                ) {
+                    os = 'Windows'
+                } else if (userAgent.indexOf('android') >= 0) {
+                    os = 'Android'
+                } else if (
+                    userAgent.indexOf('linux') >= 0 ||
+                    userAgent.indexOf('cros') >= 0 ||
+                    userAgent.indexOf('x11') >= 0
+                ) {
+                    os = 'Linux'
+                } else if (
+                    userAgent.indexOf('iphone') >= 0 ||
+                    userAgent.indexOf('ipad') >= 0 ||
+                    userAgent.indexOf('ipod') >= 0 ||
+                    userAgent.indexOf('crios') >= 0 ||
+                    userAgent.indexOf('fxios') >= 0
+                ) {
+                    os = 'iOS'
+                } else if (userAgent.indexOf('macintosh') >= 0 || userAgent.indexOf('mac_powerpc)') >= 0) {
+                    os = 'Mac'
+                } else {
+                    os = 'Other'
+                }
+                // We detect if the person uses a touch device
+                var mobileDevice =
+                    'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0
+
+                if (
+                    mobileDevice &&
+                    os !== 'Windows' &&
+                    os !== 'Windows Phone' &&
+                    os !== 'Android' &&
+                    os !== 'iOS' &&
+                    os !== 'Other' &&
+                    userAgent.indexOf('cros') === -1
+                ) {
+                    return true
+                }
+
+                // We compare oscpu with the OS extracted from the UA
+                if (typeof oscpu !== 'undefined') {
+                    oscpu = oscpu.toLowerCase()
+                    if (oscpu.indexOf('win') >= 0 && os !== 'Windows' && os !== 'Windows Phone') {
+                        return true
+                    } else if (oscpu.indexOf('linux') >= 0 && os !== 'Linux' && os !== 'Android') {
+                        return true
+                    } else if (oscpu.indexOf('mac') >= 0 && os !== 'Mac' && os !== 'iOS') {
+                        return true
+                    } else if (
+                        (oscpu.indexOf('win') === -1 &&
+                            oscpu.indexOf('linux') === -1 &&
+                            oscpu.indexOf('mac') === -1) !==
+                        (os === 'Other')
+                    ) {
+                        return true
+                    }
+                }
+
+                // We compare platform with the OS extracted from the UA
+                if (platform.indexOf('win') >= 0 && os !== 'Windows' && os !== 'Windows Phone') {
+                    return true
+                } else if (
+                    (platform.indexOf('linux') >= 0 ||
+                        platform.indexOf('android') >= 0 ||
+                        platform.indexOf('pike') >= 0) &&
+                    os !== 'Linux' &&
+                    os !== 'Android'
+                ) {
+                    return true
+                } else if (
+                    (platform.indexOf('mac') >= 0 ||
+                        platform.indexOf('ipad') >= 0 ||
+                        platform.indexOf('ipod') >= 0 ||
+                        platform.indexOf('iphone') >= 0) &&
+                    os !== 'Mac' &&
+                    os !== 'iOS'
+                ) {
+                    return true
+                } else if (platform.indexOf('arm') >= 0 && os === 'Windows Phone') {
+                    return false
+                } else if (platform.indexOf('pike') >= 0 && userAgent.indexOf('opera mini') >= 0) {
+                    return false
+                } else {
+                    var platformIsOther =
+                        platform.indexOf('win') < 0 &&
+                        platform.indexOf('linux') < 0 &&
+                        platform.indexOf('mac') < 0 &&
+                        platform.indexOf('iphone') < 0 &&
+                        platform.indexOf('ipad') < 0 &&
+                        platform.indexOf('ipod') < 0
+                    if (platformIsOther !== (os === 'Other')) {
+                        return true
+                    }
+                }
+
+                return typeof navigator.plugins === 'undefined' && os !== 'Windows' && os !== 'Windows Phone'
+            }
+            var getHasLiedBrowser = function () {
+                var userAgent = navigator.userAgent.toLowerCase()
+                var productSub = navigator.productSub
+
+                // we extract the browser from the user agent (respect the order of the tests)
+                var browser
+                if (userAgent.indexOf('edge/') >= 0 || userAgent.indexOf('iemobile/') >= 0) {
+                    // Unreliable, different versions use EdgeHTML, Webkit, Blink, etc.
+                    return false
+                } else if (userAgent.indexOf('opera mini') >= 0) {
+                    // Unreliable, different modes use Presto, WebView, Webkit, etc.
+                    return false
+                } else if (userAgent.indexOf('firefox/') >= 0) {
+                    browser = 'Firefox'
+                } else if (userAgent.indexOf('opera/') >= 0 || userAgent.indexOf(' opr/') >= 0) {
+                    browser = 'Opera'
+                } else if (userAgent.indexOf('chrome/') >= 0) {
+                    browser = 'Chrome'
+                } else if (userAgent.indexOf('safari/') >= 0) {
+                    if (
+                        userAgent.indexOf('android 1.') >= 0 ||
+                        userAgent.indexOf('android 2.') >= 0 ||
+                        userAgent.indexOf('android 3.') >= 0 ||
+                        userAgent.indexOf('android 4.') >= 0
+                    ) {
+                        browser = 'AOSP'
+                    } else {
+                        browser = 'Safari'
+                    }
+                } else if (userAgent.indexOf('trident/') >= 0) {
+                    browser = 'Internet Explorer'
+                } else {
+                    browser = 'Other'
+                }
+
+                if (
+                    (browser === 'Chrome' || browser === 'Safari' || browser === 'Opera') &&
+                    productSub !== '20030107'
+                ) {
+                    return true
+                }
+
+                // eslint-disable-next-line no-eval
+                var tempRes = eval.toString().length
+                if (tempRes === 37 && browser !== 'Safari' && browser !== 'Firefox' && browser !== 'Other') {
+                    return true
+                } else if (tempRes === 39 && browser !== 'Internet Explorer' && browser !== 'Other') {
+                    return true
+                } else if (
+                    tempRes === 33 &&
+                    browser !== 'Chrome' &&
+                    browser !== 'AOSP' &&
+                    browser !== 'Opera' &&
+                    browser !== 'Other'
+                ) {
+                    return true
+                }
+
+                // We create an error to see how it is handled
+                var errFirefox
+                try {
+                    // eslint-disable-next-line no-throw-literal
+                    throw 'a'
+                } catch (err) {
+                    try {
+                        err.toSource()
+                        errFirefox = true
+                    } catch (errOfErr) {
+                        errFirefox = false
+                    }
+                }
+                return errFirefox && browser !== 'Firefox' && browser !== 'Other'
+            }
+            var isCanvasSupported = function () {
+                var elem = document.createElement('canvas')
+                return !!(elem.getContext && elem.getContext('2d'))
+            }
+            var isWebGlSupported = function () {
+                // code taken from Modernizr
+                if (!isCanvasSupported()) {
+                    return false
+                }
+
+                var glContext = getWebglCanvas()
+                var isSupported = !!window.WebGLRenderingContext && !!glContext
+                loseWebglContext(glContext)
+                return isSupported
+            }
+            var isIE = function () {
+                if (navigator.appName === 'Microsoft Internet Explorer') {
+                    return true
+                } else if (navigator.appName === 'Netscape' && /Trident/.test(navigator.userAgent)) {
+                    // IE 11
+                    return true
+                }
+                return false
+            }
+            var hasSwfObjectLoaded = function () {
+                return typeof window.swfobject !== 'undefined'
+            }
+            var hasMinFlashInstalled = function () {
+                return window.swfobject.hasFlashPlayerVersion('9.0.0')
+            }
+            var addFlashDivNode = function (options) {
+                var node = document.createElement('div')
+                node.setAttribute('id', options.fonts.swfContainerId)
+                document.body.appendChild(node)
+            }
+            var loadSwfAndDetectFonts = function (done, options) {
+                var hiddenCallback = '___fp_swf_loaded'
+                window[hiddenCallback] = function (fonts) {
+                    done(fonts)
+                }
+                var id = options.fonts.swfContainerId
+                addFlashDivNode()
+                var flashvars = { onReady: hiddenCallback }
+                var flashparams = { allowScriptAccess: 'always', menu: 'false' }
+                window.swfobject.embedSWF(
+                    options.fonts.swfPath,
+                    id,
+                    '1',
+                    '1',
+                    '9.0.0',
+                    false,
+                    flashvars,
+                    flashparams,
+                    {}
+                )
+            }
+            var getWebglCanvas = function () {
+                var canvas = document.createElement('canvas')
+                var gl = null
+                try {
+                    gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
+                } catch (e) {
+                    /* squelch */
+                }
+                if (!gl) {
+                    gl = null
+                }
+                return gl
+            }
+            var loseWebglContext = function (context) {
+                var loseContextExtension = context.getExtension('WEBGL_lose_context')
+                if (loseContextExtension != null) {
+                    loseContextExtension.loseContext()
+                }
+            }
+
+            var components = [
+                { key: 'userAgent', getData: UserAgent },
+                { key: 'webdriver', getData: webdriver },
+                { key: 'language', getData: languageKey },
+                { key: 'colorDepth', getData: colorDepthKey },
+                { key: 'deviceMemory', getData: deviceMemoryKey },
+                { key: 'pixelRatio', getData: pixelRatioKey },
+                { key: 'hardwareConcurrency', getData: hardwareConcurrencyKey },
+                { key: 'screenResolution', getData: screenResolutionKey },
+                { key: 'availableScreenResolution', getData: availableScreenResolutionKey },
+                { key: 'timezoneOffset', getData: timezoneOffset },
+                { key: 'timezone', getData: timezone },
+                { key: 'sessionStorage', getData: sessionStorageKey },
+                { key: 'localStorage', getData: localStorageKey },
+                { key: 'indexedDb', getData: indexedDbKey },
+                { key: 'addBehavior', getData: addBehaviorKey },
+                { key: 'openDatabase', getData: openDatabaseKey },
+                { key: 'cpuClass', getData: cpuClassKey },
+                { key: 'platform', getData: platformKey },
+                { key: 'doNotTrack', getData: doNotTrackKey },
+                { key: 'plugins', getData: pluginsComponent },
+                { key: 'canvas', getData: canvasKey },
+                { key: 'webgl', getData: webglKey },
+                { key: 'webglVendorAndRenderer', getData: webglVendorAndRendererKey },
+                { key: 'adBlock', getData: adBlockKey },
+                { key: 'hasLiedLanguages', getData: hasLiedLanguagesKey },
+                { key: 'hasLiedResolution', getData: hasLiedResolutionKey },
+                { key: 'hasLiedOs', getData: hasLiedOsKey },
+                { key: 'hasLiedBrowser', getData: hasLiedBrowserKey },
+                { key: 'touchSupport', getData: touchSupportKey },
+                { key: 'fonts', getData: jsFontsKey, pauseBefore: true },
+                { key: 'fontsFlash', getData: flashFontsKey, pauseBefore: true },
+                { key: 'audio', getData: audioKey },
+                { key: 'enumerateDevices', getData: enumerateDevicesKey }
+            ]
+
+            var Fingerprint2 = function (options) {
+                throw new Error(
+                    "'new Fingerprint()' is deprecated, see https://github.com/Valve/fingerprintjs2#upgrade-guide-from-182-to-200"
+                )
+            }
+
+            Fingerprint2.get = function (options, callback) {
+                if (!callback) {
+                    callback = options
+                    options = {}
+                } else if (!options) {
+                    options = {}
+                }
+                extendSoft(options, defaultOptions)
+                options.components = options.extraComponents.concat(components)
+
+                var keys = {
+                    data: [],
+                    addPreprocessedComponent: function (key, value) {
+                        if (typeof options.preprocessor === 'function') {
+                            value = options.preprocessor(key, value)
+                        }
+                        keys.data.push({ key: key, value: value })
+                    }
+                }
+
+                var i = -1
+                var chainComponents = function (alreadyWaited) {
+                    i += 1
+                    if (i >= options.components.length) {
+                        // on finish
+                        callback(keys.data)
+                        return
+                    }
+                    var component = options.components[i]
+
+                    if (options.excludes[component.key]) {
+                        chainComponents(false) // skip
+                        return
+                    }
+
+                    if (!alreadyWaited && component.pauseBefore) {
+                        i -= 1
+                        setTimeout(function () {
+                            chainComponents(true)
+                        }, 1)
+                        return
+                    }
+
+                    try {
+                        component.getData(function (value) {
+                            keys.addPreprocessedComponent(component.key, value)
+                            chainComponents(false)
+                        }, options)
+                    } catch (error) {
+                        // main body error
+                        keys.addPreprocessedComponent(component.key, String(error))
+                        chainComponents(false)
+                    }
+                }
+
+                chainComponents(false)
+            }
+
+            Fingerprint2.getPromise = function (options) {
+                return new Promise(function (resolve, reject) {
+                    Fingerprint2.get(options, resolve)
+                })
+            }
+
+            Fingerprint2.getV18 = function (options, callback) {
+                if (callback == null) {
+                    callback = options
+                    options = {}
+                }
+                return Fingerprint2.get(options, function (components) {
+                    var newComponents = []
+                    for (var i = 0; i < components.length; i++) {
+                        var component = components[i]
+                        if (component.value === (options.NOT_AVAILABLE || 'not available')) {
+                            newComponents.push({ key: component.key, value: 'unknown' })
+                        } else if (component.key === 'plugins') {
+                            newComponents.push({
+                                key: 'plugins',
+                                value: map(component.value, function (p) {
+                                    var mimeTypes = map(p[2], function (mt) {
+                                        if (mt.join) {
+                                            return mt.join('~')
+                                        }
+                                        return mt
+                                    }).join(',')
+                                    return [p[0], p[1], mimeTypes].join('::')
+                                })
+                            })
+                        } else if (
+                            ['canvas', 'webgl'].indexOf(component.key) !== -1 &&
+                            Array.isArray(component.value)
+                        ) {
+                            // sometimes WebGL returns error in headless browsers (during CI testing for example)
+                            // so we need to join only if the values are array
+                            newComponents.push({ key: component.key, value: component.value.join('~') })
+                        } else if (
+                            ['sessionStorage', 'localStorage', 'indexedDb', 'addBehavior', 'openDatabase'].indexOf(
+                                component.key
+                            ) !== -1
+                        ) {
+                            if (component.value) {
+                                newComponents.push({ key: component.key, value: 1 })
+                            } else {
+                                // skip
+                                continue
+                            }
+                        } else {
+                            if (component.value) {
+                                newComponents.push(
+                                    component.value.join
+                                        ? { key: component.key, value: component.value.join(';') }
+                                        : component
+                                )
+                            } else {
+                                newComponents.push({ key: component.key, value: component.value })
+                            }
+                        }
+                    }
+                    var murmur = x64hash128(
+                        map(newComponents, function (component) {
+                            return component.value
+                        }).join('~~~'),
+                        31
+                    )
+                    callback(murmur, newComponents)
+                })
+            }
+
+            Fingerprint2.x64hash128 = x64hash128
+            Fingerprint2.VERSION = '2.1.2'
+            return Fingerprint2
+        })
+    })
+
+    async function getHeadData() {
+        const fp = await fingerprint2.getPromise({}).then(components => {
+            const values = components.map(component => {
+                return component.value
+            })
+            const murmur = fingerprint2.x64hash128(values.join(''), 31)
+            return murmur
+        })
         return {
-            type: RecordType.HEAD,
-            data: {
-                href: location.href,
-                sessionId: getRandomCode(),
-                userAgent: navigator.userAgent,
-                platform: navigator.platform,
-                beginTime: getTime().toString(),
-                version: pkg.version
-            },
-            time: getRadix64TimeStr()
+            href: location.href,
+            relatedId: getRandomCode(),
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            beginTime: getTime().toString(),
+            version: pkg.version,
+            fp
         }
     }
 
-    class Recorder {
+    var global$1 =
+        typeof global !== 'undefined'
+            ? global
+            : typeof self !== 'undefined'
+            ? self
+            : typeof window !== 'undefined'
+            ? window
+            : {}
+
+    var lookup = []
+    var revLookup = []
+    var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
+    var inited = false
+    function init() {
+        inited = true
+        var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+        for (var i = 0, len = code.length; i < len; ++i) {
+            lookup[i] = code[i]
+            revLookup[code.charCodeAt(i)] = i
+        }
+
+        revLookup['-'.charCodeAt(0)] = 62
+        revLookup['_'.charCodeAt(0)] = 63
+    }
+
+    function toByteArray(b64) {
+        if (!inited) {
+            init()
+        }
+        var i, j, l, tmp, placeHolders, arr
+        var len = b64.length
+
+        if (len % 4 > 0) {
+            throw new Error('Invalid string. Length must be a multiple of 4')
+        }
+
+        // the number of equal signs (place holders)
+        // if there are two placeholders, than the two characters before it
+        // represent one byte
+        // if there is only one, then the three characters before it represent 2 bytes
+        // this is just a cheap hack to not do indexOf twice
+        placeHolders = b64[len - 2] === '=' ? 2 : b64[len - 1] === '=' ? 1 : 0
+
+        // base64 is 4/3 + up to two characters of the original data
+        arr = new Arr((len * 3) / 4 - placeHolders)
+
+        // if there are placeholders, only get up to the last complete 4 chars
+        l = placeHolders > 0 ? len - 4 : len
+
+        var L = 0
+
+        for (i = 0, j = 0; i < l; i += 4, j += 3) {
+            tmp =
+                (revLookup[b64.charCodeAt(i)] << 18) |
+                (revLookup[b64.charCodeAt(i + 1)] << 12) |
+                (revLookup[b64.charCodeAt(i + 2)] << 6) |
+                revLookup[b64.charCodeAt(i + 3)]
+            arr[L++] = (tmp >> 16) & 0xff
+            arr[L++] = (tmp >> 8) & 0xff
+            arr[L++] = tmp & 0xff
+        }
+
+        if (placeHolders === 2) {
+            tmp = (revLookup[b64.charCodeAt(i)] << 2) | (revLookup[b64.charCodeAt(i + 1)] >> 4)
+            arr[L++] = tmp & 0xff
+        } else if (placeHolders === 1) {
+            tmp =
+                (revLookup[b64.charCodeAt(i)] << 10) |
+                (revLookup[b64.charCodeAt(i + 1)] << 4) |
+                (revLookup[b64.charCodeAt(i + 2)] >> 2)
+            arr[L++] = (tmp >> 8) & 0xff
+            arr[L++] = tmp & 0xff
+        }
+
+        return arr
+    }
+
+    function tripletToBase64(num) {
+        return lookup[(num >> 18) & 0x3f] + lookup[(num >> 12) & 0x3f] + lookup[(num >> 6) & 0x3f] + lookup[num & 0x3f]
+    }
+
+    function encodeChunk(uint8, start, end) {
+        var tmp
+        var output = []
+        for (var i = start; i < end; i += 3) {
+            tmp = (uint8[i] << 16) + (uint8[i + 1] << 8) + uint8[i + 2]
+            output.push(tripletToBase64(tmp))
+        }
+        return output.join('')
+    }
+
+    function fromByteArray(uint8) {
+        if (!inited) {
+            init()
+        }
+        var tmp
+        var len = uint8.length
+        var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
+        var output = ''
+        var parts = []
+        var maxChunkLength = 16383 // must be multiple of 3
+
+        // go through the array every three bytes, we'll deal with trailing stuff later
+        for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
+            parts.push(encodeChunk(uint8, i, i + maxChunkLength > len2 ? len2 : i + maxChunkLength))
+        }
+
+        // pad the end with zeros, but make sure to not forget the extra bytes
+        if (extraBytes === 1) {
+            tmp = uint8[len - 1]
+            output += lookup[tmp >> 2]
+            output += lookup[(tmp << 4) & 0x3f]
+            output += '=='
+        } else if (extraBytes === 2) {
+            tmp = (uint8[len - 2] << 8) + uint8[len - 1]
+            output += lookup[tmp >> 10]
+            output += lookup[(tmp >> 4) & 0x3f]
+            output += lookup[(tmp << 2) & 0x3f]
+            output += '='
+        }
+
+        parts.push(output)
+
+        return parts.join('')
+    }
+
+    function read(buffer, offset, isLE, mLen, nBytes) {
+        var e, m
+        var eLen = nBytes * 8 - mLen - 1
+        var eMax = (1 << eLen) - 1
+        var eBias = eMax >> 1
+        var nBits = -7
+        var i = isLE ? nBytes - 1 : 0
+        var d = isLE ? -1 : 1
+        var s = buffer[offset + i]
+
+        i += d
+
+        e = s & ((1 << -nBits) - 1)
+        s >>= -nBits
+        nBits += eLen
+        for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8) {}
+
+        m = e & ((1 << -nBits) - 1)
+        e >>= -nBits
+        nBits += mLen
+        for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8) {}
+
+        if (e === 0) {
+            e = 1 - eBias
+        } else if (e === eMax) {
+            return m ? NaN : (s ? -1 : 1) * Infinity
+        } else {
+            m = m + Math.pow(2, mLen)
+            e = e - eBias
+        }
+        return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
+    }
+
+    function write(buffer, value, offset, isLE, mLen, nBytes) {
+        var e, m, c
+        var eLen = nBytes * 8 - mLen - 1
+        var eMax = (1 << eLen) - 1
+        var eBias = eMax >> 1
+        var rt = mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0
+        var i = isLE ? 0 : nBytes - 1
+        var d = isLE ? 1 : -1
+        var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
+
+        value = Math.abs(value)
+
+        if (isNaN(value) || value === Infinity) {
+            m = isNaN(value) ? 1 : 0
+            e = eMax
+        } else {
+            e = Math.floor(Math.log(value) / Math.LN2)
+            if (value * (c = Math.pow(2, -e)) < 1) {
+                e--
+                c *= 2
+            }
+            if (e + eBias >= 1) {
+                value += rt / c
+            } else {
+                value += rt * Math.pow(2, 1 - eBias)
+            }
+            if (value * c >= 2) {
+                e++
+                c /= 2
+            }
+
+            if (e + eBias >= eMax) {
+                m = 0
+                e = eMax
+            } else if (e + eBias >= 1) {
+                m = (value * c - 1) * Math.pow(2, mLen)
+                e = e + eBias
+            } else {
+                m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen)
+                e = 0
+            }
+        }
+
+        for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
+
+        e = (e << mLen) | m
+        eLen += mLen
+        for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
+
+        buffer[offset + i - d] |= s * 128
+    }
+
+    var toString$2 = {}.toString
+
+    var isArray =
+        Array.isArray ||
+        function (arr) {
+            return toString$2.call(arr) == '[object Array]'
+        }
+
+    /*!
+     * The buffer module from node.js, for the browser.
+     *
+     * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+     * @license  MIT
+     */
+
+    var INSPECT_MAX_BYTES = 50
+
+    /**
+     * If `Buffer.TYPED_ARRAY_SUPPORT`:
+     *   === true    Use Uint8Array implementation (fastest)
+     *   === false   Use Object implementation (most compatible, even IE6)
+     *
+     * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
+     * Opera 11.6+, iOS 4.2+.
+     *
+     * Due to various browser bugs, sometimes the Object implementation will be used even
+     * when the browser supports typed arrays.
+     *
+     * Note:
+     *
+     *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
+     *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
+     *
+     *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
+     *
+     *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
+     *     incorrect length in some situations.
+
+     * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
+     * get the Object implementation, which is slower but behaves correctly.
+     */
+    Buffer.TYPED_ARRAY_SUPPORT = global$1.TYPED_ARRAY_SUPPORT !== undefined ? global$1.TYPED_ARRAY_SUPPORT : true
+
+    function kMaxLength() {
+        return Buffer.TYPED_ARRAY_SUPPORT ? 0x7fffffff : 0x3fffffff
+    }
+
+    function createBuffer(that, length) {
+        if (kMaxLength() < length) {
+            throw new RangeError('Invalid typed array length')
+        }
+        if (Buffer.TYPED_ARRAY_SUPPORT) {
+            // Return an augmented `Uint8Array` instance, for best performance
+            that = new Uint8Array(length)
+            that.__proto__ = Buffer.prototype
+        } else {
+            // Fallback: Return an object instance of the Buffer class
+            if (that === null) {
+                that = new Buffer(length)
+            }
+            that.length = length
+        }
+
+        return that
+    }
+
+    /**
+     * The Buffer constructor returns instances of `Uint8Array` that have their
+     * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
+     * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
+     * and the `Uint8Array` methods. Square bracket notation works as expected -- it
+     * returns a single octet.
+     *
+     * The `Uint8Array` prototype remains unmodified.
+     */
+
+    function Buffer(arg, encodingOrOffset, length) {
+        if (!Buffer.TYPED_ARRAY_SUPPORT && !(this instanceof Buffer)) {
+            return new Buffer(arg, encodingOrOffset, length)
+        }
+
+        // Common case.
+        if (typeof arg === 'number') {
+            if (typeof encodingOrOffset === 'string') {
+                throw new Error('If encoding is specified then the first argument must be a string')
+            }
+            return allocUnsafe(this, arg)
+        }
+        return from(this, arg, encodingOrOffset, length)
+    }
+
+    Buffer.poolSize = 8192 // not used by this implementation
+
+    // TODO: Legacy, not needed anymore. Remove in next major version.
+    Buffer._augment = function (arr) {
+        arr.__proto__ = Buffer.prototype
+        return arr
+    }
+
+    function from(that, value, encodingOrOffset, length) {
+        if (typeof value === 'number') {
+            throw new TypeError('"value" argument must not be a number')
+        }
+
+        if (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) {
+            return fromArrayBuffer(that, value, encodingOrOffset, length)
+        }
+
+        if (typeof value === 'string') {
+            return fromString(that, value, encodingOrOffset)
+        }
+
+        return fromObject(that, value)
+    }
+
+    /**
+     * Functionally equivalent to Buffer(arg, encoding) but throws a TypeError
+     * if value is a number.
+     * Buffer.from(str[, encoding])
+     * Buffer.from(array)
+     * Buffer.from(buffer)
+     * Buffer.from(arrayBuffer[, byteOffset[, length]])
+     **/
+    Buffer.from = function (value, encodingOrOffset, length) {
+        return from(null, value, encodingOrOffset, length)
+    }
+
+    if (Buffer.TYPED_ARRAY_SUPPORT) {
+        Buffer.prototype.__proto__ = Uint8Array.prototype
+        Buffer.__proto__ = Uint8Array
+    }
+
+    function assertSize(size) {
+        if (typeof size !== 'number') {
+            throw new TypeError('"size" argument must be a number')
+        } else if (size < 0) {
+            throw new RangeError('"size" argument must not be negative')
+        }
+    }
+
+    function alloc(that, size, fill, encoding) {
+        assertSize(size)
+        if (size <= 0) {
+            return createBuffer(that, size)
+        }
+        if (fill !== undefined) {
+            // Only pay attention to encoding if it's a string. This
+            // prevents accidentally sending in a number that would
+            // be interpretted as a start offset.
+            return typeof encoding === 'string'
+                ? createBuffer(that, size).fill(fill, encoding)
+                : createBuffer(that, size).fill(fill)
+        }
+        return createBuffer(that, size)
+    }
+
+    /**
+     * Creates a new filled Buffer instance.
+     * alloc(size[, fill[, encoding]])
+     **/
+    Buffer.alloc = function (size, fill, encoding) {
+        return alloc(null, size, fill, encoding)
+    }
+
+    function allocUnsafe(that, size) {
+        assertSize(size)
+        that = createBuffer(that, size < 0 ? 0 : checked(size) | 0)
+        if (!Buffer.TYPED_ARRAY_SUPPORT) {
+            for (var i = 0; i < size; ++i) {
+                that[i] = 0
+            }
+        }
+        return that
+    }
+
+    /**
+     * Equivalent to Buffer(num), by default creates a non-zero-filled Buffer instance.
+     * */
+    Buffer.allocUnsafe = function (size) {
+        return allocUnsafe(null, size)
+    }
+    /**
+     * Equivalent to SlowBuffer(num), by default creates a non-zero-filled Buffer instance.
+     */
+    Buffer.allocUnsafeSlow = function (size) {
+        return allocUnsafe(null, size)
+    }
+
+    function fromString(that, string, encoding) {
+        if (typeof encoding !== 'string' || encoding === '') {
+            encoding = 'utf8'
+        }
+
+        if (!Buffer.isEncoding(encoding)) {
+            throw new TypeError('"encoding" must be a valid string encoding')
+        }
+
+        var length = byteLength(string, encoding) | 0
+        that = createBuffer(that, length)
+
+        var actual = that.write(string, encoding)
+
+        if (actual !== length) {
+            // Writing a hex string, for example, that contains invalid characters will
+            // cause everything after the first invalid character to be ignored. (e.g.
+            // 'abxxcd' will be treated as 'ab')
+            that = that.slice(0, actual)
+        }
+
+        return that
+    }
+
+    function fromArrayLike(that, array) {
+        var length = array.length < 0 ? 0 : checked(array.length) | 0
+        that = createBuffer(that, length)
+        for (var i = 0; i < length; i += 1) {
+            that[i] = array[i] & 255
+        }
+        return that
+    }
+
+    function fromArrayBuffer(that, array, byteOffset, length) {
+        array.byteLength // this throws if `array` is not a valid ArrayBuffer
+
+        if (byteOffset < 0 || array.byteLength < byteOffset) {
+            throw new RangeError("'offset' is out of bounds")
+        }
+
+        if (array.byteLength < byteOffset + (length || 0)) {
+            throw new RangeError("'length' is out of bounds")
+        }
+
+        if (byteOffset === undefined && length === undefined) {
+            array = new Uint8Array(array)
+        } else if (length === undefined) {
+            array = new Uint8Array(array, byteOffset)
+        } else {
+            array = new Uint8Array(array, byteOffset, length)
+        }
+
+        if (Buffer.TYPED_ARRAY_SUPPORT) {
+            // Return an augmented `Uint8Array` instance, for best performance
+            that = array
+            that.__proto__ = Buffer.prototype
+        } else {
+            // Fallback: Return an object instance of the Buffer class
+            that = fromArrayLike(that, array)
+        }
+        return that
+    }
+
+    function fromObject(that, obj) {
+        if (internalIsBuffer(obj)) {
+            var len = checked(obj.length) | 0
+            that = createBuffer(that, len)
+
+            if (that.length === 0) {
+                return that
+            }
+
+            obj.copy(that, 0, 0, len)
+            return that
+        }
+
+        if (obj) {
+            if ((typeof ArrayBuffer !== 'undefined' && obj.buffer instanceof ArrayBuffer) || 'length' in obj) {
+                if (typeof obj.length !== 'number' || isnan(obj.length)) {
+                    return createBuffer(that, 0)
+                }
+                return fromArrayLike(that, obj)
+            }
+
+            if (obj.type === 'Buffer' && isArray(obj.data)) {
+                return fromArrayLike(that, obj.data)
+            }
+        }
+
+        throw new TypeError('First argument must be a string, Buffer, ArrayBuffer, Array, or array-like object.')
+    }
+
+    function checked(length) {
+        // Note: cannot use `length < kMaxLength()` here because that fails when
+        // length is NaN (which is otherwise coerced to zero.)
+        if (length >= kMaxLength()) {
+            throw new RangeError(
+                'Attempt to allocate Buffer larger than maximum ' + 'size: 0x' + kMaxLength().toString(16) + ' bytes'
+            )
+        }
+        return length | 0
+    }
+    Buffer.isBuffer = isBuffer
+    function internalIsBuffer(b) {
+        return !!(b != null && b._isBuffer)
+    }
+
+    Buffer.compare = function compare(a, b) {
+        if (!internalIsBuffer(a) || !internalIsBuffer(b)) {
+            throw new TypeError('Arguments must be Buffers')
+        }
+
+        if (a === b) return 0
+
+        var x = a.length
+        var y = b.length
+
+        for (var i = 0, len = Math.min(x, y); i < len; ++i) {
+            if (a[i] !== b[i]) {
+                x = a[i]
+                y = b[i]
+                break
+            }
+        }
+
+        if (x < y) return -1
+        if (y < x) return 1
+        return 0
+    }
+
+    Buffer.isEncoding = function isEncoding(encoding) {
+        switch (String(encoding).toLowerCase()) {
+            case 'hex':
+            case 'utf8':
+            case 'utf-8':
+            case 'ascii':
+            case 'latin1':
+            case 'binary':
+            case 'base64':
+            case 'ucs2':
+            case 'ucs-2':
+            case 'utf16le':
+            case 'utf-16le':
+                return true
+            default:
+                return false
+        }
+    }
+
+    Buffer.concat = function concat(list, length) {
+        if (!isArray(list)) {
+            throw new TypeError('"list" argument must be an Array of Buffers')
+        }
+
+        if (list.length === 0) {
+            return Buffer.alloc(0)
+        }
+
+        var i
+        if (length === undefined) {
+            length = 0
+            for (i = 0; i < list.length; ++i) {
+                length += list[i].length
+            }
+        }
+
+        var buffer = Buffer.allocUnsafe(length)
+        var pos = 0
+        for (i = 0; i < list.length; ++i) {
+            var buf = list[i]
+            if (!internalIsBuffer(buf)) {
+                throw new TypeError('"list" argument must be an Array of Buffers')
+            }
+            buf.copy(buffer, pos)
+            pos += buf.length
+        }
+        return buffer
+    }
+
+    function byteLength(string, encoding) {
+        if (internalIsBuffer(string)) {
+            return string.length
+        }
+        if (
+            typeof ArrayBuffer !== 'undefined' &&
+            typeof ArrayBuffer.isView === 'function' &&
+            (ArrayBuffer.isView(string) || string instanceof ArrayBuffer)
+        ) {
+            return string.byteLength
+        }
+        if (typeof string !== 'string') {
+            string = '' + string
+        }
+
+        var len = string.length
+        if (len === 0) return 0
+
+        // Use a for loop to avoid recursion
+        var loweredCase = false
+        for (;;) {
+            switch (encoding) {
+                case 'ascii':
+                case 'latin1':
+                case 'binary':
+                    return len
+                case 'utf8':
+                case 'utf-8':
+                case undefined:
+                    return utf8ToBytes(string).length
+                case 'ucs2':
+                case 'ucs-2':
+                case 'utf16le':
+                case 'utf-16le':
+                    return len * 2
+                case 'hex':
+                    return len >>> 1
+                case 'base64':
+                    return base64ToBytes(string).length
+                default:
+                    if (loweredCase) return utf8ToBytes(string).length // assume utf8
+                    encoding = ('' + encoding).toLowerCase()
+                    loweredCase = true
+            }
+        }
+    }
+    Buffer.byteLength = byteLength
+
+    function slowToString(encoding, start, end) {
+        var loweredCase = false
+
+        // No need to verify that "this.length <= MAX_UINT32" since it's a read-only
+        // property of a typed array.
+
+        // This behaves neither like String nor Uint8Array in that we set start/end
+        // to their upper/lower bounds if the value passed is out of range.
+        // undefined is handled specially as per ECMA-262 6th Edition,
+        // Section 13.3.3.7 Runtime Semantics: KeyedBindingInitialization.
+        if (start === undefined || start < 0) {
+            start = 0
+        }
+        // Return early if start > this.length. Done here to prevent potential uint32
+        // coercion fail below.
+        if (start > this.length) {
+            return ''
+        }
+
+        if (end === undefined || end > this.length) {
+            end = this.length
+        }
+
+        if (end <= 0) {
+            return ''
+        }
+
+        // Force coersion to uint32. This will also coerce falsey/NaN values to 0.
+        end >>>= 0
+        start >>>= 0
+
+        if (end <= start) {
+            return ''
+        }
+
+        if (!encoding) encoding = 'utf8'
+
+        while (true) {
+            switch (encoding) {
+                case 'hex':
+                    return hexSlice(this, start, end)
+
+                case 'utf8':
+                case 'utf-8':
+                    return utf8Slice(this, start, end)
+
+                case 'ascii':
+                    return asciiSlice(this, start, end)
+
+                case 'latin1':
+                case 'binary':
+                    return latin1Slice(this, start, end)
+
+                case 'base64':
+                    return base64Slice(this, start, end)
+
+                case 'ucs2':
+                case 'ucs-2':
+                case 'utf16le':
+                case 'utf-16le':
+                    return utf16leSlice(this, start, end)
+
+                default:
+                    if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
+                    encoding = (encoding + '').toLowerCase()
+                    loweredCase = true
+            }
+        }
+    }
+
+    // The property is used by `Buffer.isBuffer` and `is-buffer` (in Safari 5-7) to detect
+    // Buffer instances.
+    Buffer.prototype._isBuffer = true
+
+    function swap(b, n, m) {
+        var i = b[n]
+        b[n] = b[m]
+        b[m] = i
+    }
+
+    Buffer.prototype.swap16 = function swap16() {
+        var len = this.length
+        if (len % 2 !== 0) {
+            throw new RangeError('Buffer size must be a multiple of 16-bits')
+        }
+        for (var i = 0; i < len; i += 2) {
+            swap(this, i, i + 1)
+        }
+        return this
+    }
+
+    Buffer.prototype.swap32 = function swap32() {
+        var len = this.length
+        if (len % 4 !== 0) {
+            throw new RangeError('Buffer size must be a multiple of 32-bits')
+        }
+        for (var i = 0; i < len; i += 4) {
+            swap(this, i, i + 3)
+            swap(this, i + 1, i + 2)
+        }
+        return this
+    }
+
+    Buffer.prototype.swap64 = function swap64() {
+        var len = this.length
+        if (len % 8 !== 0) {
+            throw new RangeError('Buffer size must be a multiple of 64-bits')
+        }
+        for (var i = 0; i < len; i += 8) {
+            swap(this, i, i + 7)
+            swap(this, i + 1, i + 6)
+            swap(this, i + 2, i + 5)
+            swap(this, i + 3, i + 4)
+        }
+        return this
+    }
+
+    Buffer.prototype.toString = function toString() {
+        var length = this.length | 0
+        if (length === 0) return ''
+        if (arguments.length === 0) return utf8Slice(this, 0, length)
+        return slowToString.apply(this, arguments)
+    }
+
+    Buffer.prototype.equals = function equals(b) {
+        if (!internalIsBuffer(b)) throw new TypeError('Argument must be a Buffer')
+        if (this === b) return true
+        return Buffer.compare(this, b) === 0
+    }
+
+    Buffer.prototype.inspect = function inspect() {
+        var str = ''
+        var max = INSPECT_MAX_BYTES
+        if (this.length > 0) {
+            str = this.toString('hex', 0, max).match(/.{2}/g).join(' ')
+            if (this.length > max) str += ' ... '
+        }
+        return '<Buffer ' + str + '>'
+    }
+
+    Buffer.prototype.compare = function compare(target, start, end, thisStart, thisEnd) {
+        if (!internalIsBuffer(target)) {
+            throw new TypeError('Argument must be a Buffer')
+        }
+
+        if (start === undefined) {
+            start = 0
+        }
+        if (end === undefined) {
+            end = target ? target.length : 0
+        }
+        if (thisStart === undefined) {
+            thisStart = 0
+        }
+        if (thisEnd === undefined) {
+            thisEnd = this.length
+        }
+
+        if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
+            throw new RangeError('out of range index')
+        }
+
+        if (thisStart >= thisEnd && start >= end) {
+            return 0
+        }
+        if (thisStart >= thisEnd) {
+            return -1
+        }
+        if (start >= end) {
+            return 1
+        }
+
+        start >>>= 0
+        end >>>= 0
+        thisStart >>>= 0
+        thisEnd >>>= 0
+
+        if (this === target) return 0
+
+        var x = thisEnd - thisStart
+        var y = end - start
+        var len = Math.min(x, y)
+
+        var thisCopy = this.slice(thisStart, thisEnd)
+        var targetCopy = target.slice(start, end)
+
+        for (var i = 0; i < len; ++i) {
+            if (thisCopy[i] !== targetCopy[i]) {
+                x = thisCopy[i]
+                y = targetCopy[i]
+                break
+            }
+        }
+
+        if (x < y) return -1
+        if (y < x) return 1
+        return 0
+    }
+
+    // Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
+    // OR the last index of `val` in `buffer` at offset <= `byteOffset`.
+    //
+    // Arguments:
+    // - buffer - a Buffer to search
+    // - val - a string, Buffer, or number
+    // - byteOffset - an index into `buffer`; will be clamped to an int32
+    // - encoding - an optional encoding, relevant is val is a string
+    // - dir - true for indexOf, false for lastIndexOf
+    function bidirectionalIndexOf(buffer, val, byteOffset, encoding, dir) {
+        // Empty buffer means no match
+        if (buffer.length === 0) return -1
+
+        // Normalize byteOffset
+        if (typeof byteOffset === 'string') {
+            encoding = byteOffset
+            byteOffset = 0
+        } else if (byteOffset > 0x7fffffff) {
+            byteOffset = 0x7fffffff
+        } else if (byteOffset < -0x80000000) {
+            byteOffset = -0x80000000
+        }
+        byteOffset = +byteOffset // Coerce to Number.
+        if (isNaN(byteOffset)) {
+            // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
+            byteOffset = dir ? 0 : buffer.length - 1
+        }
+
+        // Normalize byteOffset: negative offsets start from the end of the buffer
+        if (byteOffset < 0) byteOffset = buffer.length + byteOffset
+        if (byteOffset >= buffer.length) {
+            if (dir) return -1
+            else byteOffset = buffer.length - 1
+        } else if (byteOffset < 0) {
+            if (dir) byteOffset = 0
+            else return -1
+        }
+
+        // Normalize val
+        if (typeof val === 'string') {
+            val = Buffer.from(val, encoding)
+        }
+
+        // Finally, search either indexOf (if dir is true) or lastIndexOf
+        if (internalIsBuffer(val)) {
+            // Special case: looking for empty string/buffer always fails
+            if (val.length === 0) {
+                return -1
+            }
+            return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
+        } else if (typeof val === 'number') {
+            val = val & 0xff // Search for a byte value [0-255]
+            if (Buffer.TYPED_ARRAY_SUPPORT && typeof Uint8Array.prototype.indexOf === 'function') {
+                if (dir) {
+                    return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
+                } else {
+                    return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
+                }
+            }
+            return arrayIndexOf(buffer, [val], byteOffset, encoding, dir)
+        }
+
+        throw new TypeError('val must be string, number or Buffer')
+    }
+
+    function arrayIndexOf(arr, val, byteOffset, encoding, dir) {
+        var indexSize = 1
+        var arrLength = arr.length
+        var valLength = val.length
+
+        if (encoding !== undefined) {
+            encoding = String(encoding).toLowerCase()
+            if (encoding === 'ucs2' || encoding === 'ucs-2' || encoding === 'utf16le' || encoding === 'utf-16le') {
+                if (arr.length < 2 || val.length < 2) {
+                    return -1
+                }
+                indexSize = 2
+                arrLength /= 2
+                valLength /= 2
+                byteOffset /= 2
+            }
+        }
+
+        function read(buf, i) {
+            if (indexSize === 1) {
+                return buf[i]
+            } else {
+                return buf.readUInt16BE(i * indexSize)
+            }
+        }
+
+        var i
+        if (dir) {
+            var foundIndex = -1
+            for (i = byteOffset; i < arrLength; i++) {
+                if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
+                    if (foundIndex === -1) foundIndex = i
+                    if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
+                } else {
+                    if (foundIndex !== -1) i -= i - foundIndex
+                    foundIndex = -1
+                }
+            }
+        } else {
+            if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
+            for (i = byteOffset; i >= 0; i--) {
+                var found = true
+                for (var j = 0; j < valLength; j++) {
+                    if (read(arr, i + j) !== read(val, j)) {
+                        found = false
+                        break
+                    }
+                }
+                if (found) return i
+            }
+        }
+
+        return -1
+    }
+
+    Buffer.prototype.includes = function includes(val, byteOffset, encoding) {
+        return this.indexOf(val, byteOffset, encoding) !== -1
+    }
+
+    Buffer.prototype.indexOf = function indexOf(val, byteOffset, encoding) {
+        return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
+    }
+
+    Buffer.prototype.lastIndexOf = function lastIndexOf(val, byteOffset, encoding) {
+        return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
+    }
+
+    function hexWrite(buf, string, offset, length) {
+        offset = Number(offset) || 0
+        var remaining = buf.length - offset
+        if (!length) {
+            length = remaining
+        } else {
+            length = Number(length)
+            if (length > remaining) {
+                length = remaining
+            }
+        }
+
+        // must be an even number of digits
+        var strLen = string.length
+        if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
+
+        if (length > strLen / 2) {
+            length = strLen / 2
+        }
+        for (var i = 0; i < length; ++i) {
+            var parsed = parseInt(string.substr(i * 2, 2), 16)
+            if (isNaN(parsed)) return i
+            buf[offset + i] = parsed
+        }
+        return i
+    }
+
+    function utf8Write(buf, string, offset, length) {
+        return blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
+    }
+
+    function asciiWrite(buf, string, offset, length) {
+        return blitBuffer(asciiToBytes(string), buf, offset, length)
+    }
+
+    function latin1Write(buf, string, offset, length) {
+        return asciiWrite(buf, string, offset, length)
+    }
+
+    function base64Write(buf, string, offset, length) {
+        return blitBuffer(base64ToBytes(string), buf, offset, length)
+    }
+
+    function ucs2Write(buf, string, offset, length) {
+        return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
+    }
+
+    Buffer.prototype.write = function write(string, offset, length, encoding) {
+        // Buffer#write(string)
+        if (offset === undefined) {
+            encoding = 'utf8'
+            length = this.length
+            offset = 0
+            // Buffer#write(string, encoding)
+        } else if (length === undefined && typeof offset === 'string') {
+            encoding = offset
+            length = this.length
+            offset = 0
+            // Buffer#write(string, offset[, length][, encoding])
+        } else if (isFinite(offset)) {
+            offset = offset | 0
+            if (isFinite(length)) {
+                length = length | 0
+                if (encoding === undefined) encoding = 'utf8'
+            } else {
+                encoding = length
+                length = undefined
+            }
+            // legacy write(string, encoding, offset, length) - remove in v0.13
+        } else {
+            throw new Error('Buffer.write(string, encoding, offset[, length]) is no longer supported')
+        }
+
+        var remaining = this.length - offset
+        if (length === undefined || length > remaining) length = remaining
+
+        if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
+            throw new RangeError('Attempt to write outside buffer bounds')
+        }
+
+        if (!encoding) encoding = 'utf8'
+
+        var loweredCase = false
+        for (;;) {
+            switch (encoding) {
+                case 'hex':
+                    return hexWrite(this, string, offset, length)
+
+                case 'utf8':
+                case 'utf-8':
+                    return utf8Write(this, string, offset, length)
+
+                case 'ascii':
+                    return asciiWrite(this, string, offset, length)
+
+                case 'latin1':
+                case 'binary':
+                    return latin1Write(this, string, offset, length)
+
+                case 'base64':
+                    // Warning: maxLength not taken into account in base64Write
+                    return base64Write(this, string, offset, length)
+
+                case 'ucs2':
+                case 'ucs-2':
+                case 'utf16le':
+                case 'utf-16le':
+                    return ucs2Write(this, string, offset, length)
+
+                default:
+                    if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
+                    encoding = ('' + encoding).toLowerCase()
+                    loweredCase = true
+            }
+        }
+    }
+
+    Buffer.prototype.toJSON = function toJSON() {
+        return {
+            type: 'Buffer',
+            data: Array.prototype.slice.call(this._arr || this, 0)
+        }
+    }
+
+    function base64Slice(buf, start, end) {
+        if (start === 0 && end === buf.length) {
+            return fromByteArray(buf)
+        } else {
+            return fromByteArray(buf.slice(start, end))
+        }
+    }
+
+    function utf8Slice(buf, start, end) {
+        end = Math.min(buf.length, end)
+        var res = []
+
+        var i = start
+        while (i < end) {
+            var firstByte = buf[i]
+            var codePoint = null
+            var bytesPerSequence = firstByte > 0xef ? 4 : firstByte > 0xdf ? 3 : firstByte > 0xbf ? 2 : 1
+
+            if (i + bytesPerSequence <= end) {
+                var secondByte, thirdByte, fourthByte, tempCodePoint
+
+                switch (bytesPerSequence) {
+                    case 1:
+                        if (firstByte < 0x80) {
+                            codePoint = firstByte
+                        }
+                        break
+                    case 2:
+                        secondByte = buf[i + 1]
+                        if ((secondByte & 0xc0) === 0x80) {
+                            tempCodePoint = ((firstByte & 0x1f) << 0x6) | (secondByte & 0x3f)
+                            if (tempCodePoint > 0x7f) {
+                                codePoint = tempCodePoint
+                            }
+                        }
+                        break
+                    case 3:
+                        secondByte = buf[i + 1]
+                        thirdByte = buf[i + 2]
+                        if ((secondByte & 0xc0) === 0x80 && (thirdByte & 0xc0) === 0x80) {
+                            tempCodePoint =
+                                ((firstByte & 0xf) << 0xc) | ((secondByte & 0x3f) << 0x6) | (thirdByte & 0x3f)
+                            if (tempCodePoint > 0x7ff && (tempCodePoint < 0xd800 || tempCodePoint > 0xdfff)) {
+                                codePoint = tempCodePoint
+                            }
+                        }
+                        break
+                    case 4:
+                        secondByte = buf[i + 1]
+                        thirdByte = buf[i + 2]
+                        fourthByte = buf[i + 3]
+                        if (
+                            (secondByte & 0xc0) === 0x80 &&
+                            (thirdByte & 0xc0) === 0x80 &&
+                            (fourthByte & 0xc0) === 0x80
+                        ) {
+                            tempCodePoint =
+                                ((firstByte & 0xf) << 0x12) |
+                                ((secondByte & 0x3f) << 0xc) |
+                                ((thirdByte & 0x3f) << 0x6) |
+                                (fourthByte & 0x3f)
+                            if (tempCodePoint > 0xffff && tempCodePoint < 0x110000) {
+                                codePoint = tempCodePoint
+                            }
+                        }
+                }
+            }
+
+            if (codePoint === null) {
+                // we did not generate a valid codePoint so insert a
+                // replacement char (U+FFFD) and advance only 1 byte
+                codePoint = 0xfffd
+                bytesPerSequence = 1
+            } else if (codePoint > 0xffff) {
+                // encode to utf16 (surrogate pair dance)
+                codePoint -= 0x10000
+                res.push(((codePoint >>> 10) & 0x3ff) | 0xd800)
+                codePoint = 0xdc00 | (codePoint & 0x3ff)
+            }
+
+            res.push(codePoint)
+            i += bytesPerSequence
+        }
+
+        return decodeCodePointsArray(res)
+    }
+
+    // Based on http://stackoverflow.com/a/22747272/680742, the browser with
+    // the lowest limit is Chrome, with 0x10000 args.
+    // We go 1 magnitude less, for safety
+    var MAX_ARGUMENTS_LENGTH = 0x1000
+
+    function decodeCodePointsArray(codePoints) {
+        var len = codePoints.length
+        if (len <= MAX_ARGUMENTS_LENGTH) {
+            return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
+        }
+
+        // Decode in chunks to avoid "call stack size exceeded".
+        var res = ''
+        var i = 0
+        while (i < len) {
+            res += String.fromCharCode.apply(String, codePoints.slice(i, (i += MAX_ARGUMENTS_LENGTH)))
+        }
+        return res
+    }
+
+    function asciiSlice(buf, start, end) {
+        var ret = ''
+        end = Math.min(buf.length, end)
+
+        for (var i = start; i < end; ++i) {
+            ret += String.fromCharCode(buf[i] & 0x7f)
+        }
+        return ret
+    }
+
+    function latin1Slice(buf, start, end) {
+        var ret = ''
+        end = Math.min(buf.length, end)
+
+        for (var i = start; i < end; ++i) {
+            ret += String.fromCharCode(buf[i])
+        }
+        return ret
+    }
+
+    function hexSlice(buf, start, end) {
+        var len = buf.length
+
+        if (!start || start < 0) start = 0
+        if (!end || end < 0 || end > len) end = len
+
+        var out = ''
+        for (var i = start; i < end; ++i) {
+            out += toHex(buf[i])
+        }
+        return out
+    }
+
+    function utf16leSlice(buf, start, end) {
+        var bytes = buf.slice(start, end)
+        var res = ''
+        for (var i = 0; i < bytes.length; i += 2) {
+            res += String.fromCharCode(bytes[i] + bytes[i + 1] * 256)
+        }
+        return res
+    }
+
+    Buffer.prototype.slice = function slice(start, end) {
+        var len = this.length
+        start = ~~start
+        end = end === undefined ? len : ~~end
+
+        if (start < 0) {
+            start += len
+            if (start < 0) start = 0
+        } else if (start > len) {
+            start = len
+        }
+
+        if (end < 0) {
+            end += len
+            if (end < 0) end = 0
+        } else if (end > len) {
+            end = len
+        }
+
+        if (end < start) end = start
+
+        var newBuf
+        if (Buffer.TYPED_ARRAY_SUPPORT) {
+            newBuf = this.subarray(start, end)
+            newBuf.__proto__ = Buffer.prototype
+        } else {
+            var sliceLen = end - start
+            newBuf = new Buffer(sliceLen, undefined)
+            for (var i = 0; i < sliceLen; ++i) {
+                newBuf[i] = this[i + start]
+            }
+        }
+
+        return newBuf
+    }
+
+    /*
+     * Need to make sure that buffer isn't trying to write out of bounds.
+     */
+    function checkOffset(offset, ext, length) {
+        if (offset % 1 !== 0 || offset < 0) throw new RangeError('offset is not uint')
+        if (offset + ext > length) throw new RangeError('Trying to access beyond buffer length')
+    }
+
+    Buffer.prototype.readUIntLE = function readUIntLE(offset, byteLength, noAssert) {
+        offset = offset | 0
+        byteLength = byteLength | 0
+        if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+        var val = this[offset]
+        var mul = 1
+        var i = 0
+        while (++i < byteLength && (mul *= 0x100)) {
+            val += this[offset + i] * mul
+        }
+
+        return val
+    }
+
+    Buffer.prototype.readUIntBE = function readUIntBE(offset, byteLength, noAssert) {
+        offset = offset | 0
+        byteLength = byteLength | 0
+        if (!noAssert) {
+            checkOffset(offset, byteLength, this.length)
+        }
+
+        var val = this[offset + --byteLength]
+        var mul = 1
+        while (byteLength > 0 && (mul *= 0x100)) {
+            val += this[offset + --byteLength] * mul
+        }
+
+        return val
+    }
+
+    Buffer.prototype.readUInt8 = function readUInt8(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 1, this.length)
+        return this[offset]
+    }
+
+    Buffer.prototype.readUInt16LE = function readUInt16LE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 2, this.length)
+        return this[offset] | (this[offset + 1] << 8)
+    }
+
+    Buffer.prototype.readUInt16BE = function readUInt16BE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 2, this.length)
+        return (this[offset] << 8) | this[offset + 1]
+    }
+
+    Buffer.prototype.readUInt32LE = function readUInt32LE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 4, this.length)
+
+        return (this[offset] | (this[offset + 1] << 8) | (this[offset + 2] << 16)) + this[offset + 3] * 0x1000000
+    }
+
+    Buffer.prototype.readUInt32BE = function readUInt32BE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 4, this.length)
+
+        return this[offset] * 0x1000000 + ((this[offset + 1] << 16) | (this[offset + 2] << 8) | this[offset + 3])
+    }
+
+    Buffer.prototype.readIntLE = function readIntLE(offset, byteLength, noAssert) {
+        offset = offset | 0
+        byteLength = byteLength | 0
+        if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+        var val = this[offset]
+        var mul = 1
+        var i = 0
+        while (++i < byteLength && (mul *= 0x100)) {
+            val += this[offset + i] * mul
+        }
+        mul *= 0x80
+
+        if (val >= mul) val -= Math.pow(2, 8 * byteLength)
+
+        return val
+    }
+
+    Buffer.prototype.readIntBE = function readIntBE(offset, byteLength, noAssert) {
+        offset = offset | 0
+        byteLength = byteLength | 0
+        if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+        var i = byteLength
+        var mul = 1
+        var val = this[offset + --i]
+        while (i > 0 && (mul *= 0x100)) {
+            val += this[offset + --i] * mul
+        }
+        mul *= 0x80
+
+        if (val >= mul) val -= Math.pow(2, 8 * byteLength)
+
+        return val
+    }
+
+    Buffer.prototype.readInt8 = function readInt8(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 1, this.length)
+        if (!(this[offset] & 0x80)) return this[offset]
+        return (0xff - this[offset] + 1) * -1
+    }
+
+    Buffer.prototype.readInt16LE = function readInt16LE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 2, this.length)
+        var val = this[offset] | (this[offset + 1] << 8)
+        return val & 0x8000 ? val | 0xffff0000 : val
+    }
+
+    Buffer.prototype.readInt16BE = function readInt16BE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 2, this.length)
+        var val = this[offset + 1] | (this[offset] << 8)
+        return val & 0x8000 ? val | 0xffff0000 : val
+    }
+
+    Buffer.prototype.readInt32LE = function readInt32LE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 4, this.length)
+
+        return this[offset] | (this[offset + 1] << 8) | (this[offset + 2] << 16) | (this[offset + 3] << 24)
+    }
+
+    Buffer.prototype.readInt32BE = function readInt32BE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 4, this.length)
+
+        return (this[offset] << 24) | (this[offset + 1] << 16) | (this[offset + 2] << 8) | this[offset + 3]
+    }
+
+    Buffer.prototype.readFloatLE = function readFloatLE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 4, this.length)
+        return read(this, offset, true, 23, 4)
+    }
+
+    Buffer.prototype.readFloatBE = function readFloatBE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 4, this.length)
+        return read(this, offset, false, 23, 4)
+    }
+
+    Buffer.prototype.readDoubleLE = function readDoubleLE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 8, this.length)
+        return read(this, offset, true, 52, 8)
+    }
+
+    Buffer.prototype.readDoubleBE = function readDoubleBE(offset, noAssert) {
+        if (!noAssert) checkOffset(offset, 8, this.length)
+        return read(this, offset, false, 52, 8)
+    }
+
+    function checkInt(buf, value, offset, ext, max, min) {
+        if (!internalIsBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance')
+        if (value > max || value < min) throw new RangeError('"value" argument is out of bounds')
+        if (offset + ext > buf.length) throw new RangeError('Index out of range')
+    }
+
+    Buffer.prototype.writeUIntLE = function writeUIntLE(value, offset, byteLength, noAssert) {
+        value = +value
+        offset = offset | 0
+        byteLength = byteLength | 0
+        if (!noAssert) {
+            var maxBytes = Math.pow(2, 8 * byteLength) - 1
+            checkInt(this, value, offset, byteLength, maxBytes, 0)
+        }
+
+        var mul = 1
+        var i = 0
+        this[offset] = value & 0xff
+        while (++i < byteLength && (mul *= 0x100)) {
+            this[offset + i] = (value / mul) & 0xff
+        }
+
+        return offset + byteLength
+    }
+
+    Buffer.prototype.writeUIntBE = function writeUIntBE(value, offset, byteLength, noAssert) {
+        value = +value
+        offset = offset | 0
+        byteLength = byteLength | 0
+        if (!noAssert) {
+            var maxBytes = Math.pow(2, 8 * byteLength) - 1
+            checkInt(this, value, offset, byteLength, maxBytes, 0)
+        }
+
+        var i = byteLength - 1
+        var mul = 1
+        this[offset + i] = value & 0xff
+        while (--i >= 0 && (mul *= 0x100)) {
+            this[offset + i] = (value / mul) & 0xff
+        }
+
+        return offset + byteLength
+    }
+
+    Buffer.prototype.writeUInt8 = function writeUInt8(value, offset, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
+        if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
+        this[offset] = value & 0xff
+        return offset + 1
+    }
+
+    function objectWriteUInt16(buf, value, offset, littleEndian) {
+        if (value < 0) value = 0xffff + value + 1
+        for (var i = 0, j = Math.min(buf.length - offset, 2); i < j; ++i) {
+            buf[offset + i] = (value & (0xff << (8 * (littleEndian ? i : 1 - i)))) >>> ((littleEndian ? i : 1 - i) * 8)
+        }
+    }
+
+    Buffer.prototype.writeUInt16LE = function writeUInt16LE(value, offset, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
+        if (Buffer.TYPED_ARRAY_SUPPORT) {
+            this[offset] = value & 0xff
+            this[offset + 1] = value >>> 8
+        } else {
+            objectWriteUInt16(this, value, offset, true)
+        }
+        return offset + 2
+    }
+
+    Buffer.prototype.writeUInt16BE = function writeUInt16BE(value, offset, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
+        if (Buffer.TYPED_ARRAY_SUPPORT) {
+            this[offset] = value >>> 8
+            this[offset + 1] = value & 0xff
+        } else {
+            objectWriteUInt16(this, value, offset, false)
+        }
+        return offset + 2
+    }
+
+    function objectWriteUInt32(buf, value, offset, littleEndian) {
+        if (value < 0) value = 0xffffffff + value + 1
+        for (var i = 0, j = Math.min(buf.length - offset, 4); i < j; ++i) {
+            buf[offset + i] = (value >>> ((littleEndian ? i : 3 - i) * 8)) & 0xff
+        }
+    }
+
+    Buffer.prototype.writeUInt32LE = function writeUInt32LE(value, offset, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
+        if (Buffer.TYPED_ARRAY_SUPPORT) {
+            this[offset + 3] = value >>> 24
+            this[offset + 2] = value >>> 16
+            this[offset + 1] = value >>> 8
+            this[offset] = value & 0xff
+        } else {
+            objectWriteUInt32(this, value, offset, true)
+        }
+        return offset + 4
+    }
+
+    Buffer.prototype.writeUInt32BE = function writeUInt32BE(value, offset, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
+        if (Buffer.TYPED_ARRAY_SUPPORT) {
+            this[offset] = value >>> 24
+            this[offset + 1] = value >>> 16
+            this[offset + 2] = value >>> 8
+            this[offset + 3] = value & 0xff
+        } else {
+            objectWriteUInt32(this, value, offset, false)
+        }
+        return offset + 4
+    }
+
+    Buffer.prototype.writeIntLE = function writeIntLE(value, offset, byteLength, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) {
+            var limit = Math.pow(2, 8 * byteLength - 1)
+
+            checkInt(this, value, offset, byteLength, limit - 1, -limit)
+        }
+
+        var i = 0
+        var mul = 1
+        var sub = 0
+        this[offset] = value & 0xff
+        while (++i < byteLength && (mul *= 0x100)) {
+            if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
+                sub = 1
+            }
+            this[offset + i] = (((value / mul) >> 0) - sub) & 0xff
+        }
+
+        return offset + byteLength
+    }
+
+    Buffer.prototype.writeIntBE = function writeIntBE(value, offset, byteLength, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) {
+            var limit = Math.pow(2, 8 * byteLength - 1)
+
+            checkInt(this, value, offset, byteLength, limit - 1, -limit)
+        }
+
+        var i = byteLength - 1
+        var mul = 1
+        var sub = 0
+        this[offset + i] = value & 0xff
+        while (--i >= 0 && (mul *= 0x100)) {
+            if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
+                sub = 1
+            }
+            this[offset + i] = (((value / mul) >> 0) - sub) & 0xff
+        }
+
+        return offset + byteLength
+    }
+
+    Buffer.prototype.writeInt8 = function writeInt8(value, offset, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
+        if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
+        if (value < 0) value = 0xff + value + 1
+        this[offset] = value & 0xff
+        return offset + 1
+    }
+
+    Buffer.prototype.writeInt16LE = function writeInt16LE(value, offset, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+        if (Buffer.TYPED_ARRAY_SUPPORT) {
+            this[offset] = value & 0xff
+            this[offset + 1] = value >>> 8
+        } else {
+            objectWriteUInt16(this, value, offset, true)
+        }
+        return offset + 2
+    }
+
+    Buffer.prototype.writeInt16BE = function writeInt16BE(value, offset, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+        if (Buffer.TYPED_ARRAY_SUPPORT) {
+            this[offset] = value >>> 8
+            this[offset + 1] = value & 0xff
+        } else {
+            objectWriteUInt16(this, value, offset, false)
+        }
+        return offset + 2
+    }
+
+    Buffer.prototype.writeInt32LE = function writeInt32LE(value, offset, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+        if (Buffer.TYPED_ARRAY_SUPPORT) {
+            this[offset] = value & 0xff
+            this[offset + 1] = value >>> 8
+            this[offset + 2] = value >>> 16
+            this[offset + 3] = value >>> 24
+        } else {
+            objectWriteUInt32(this, value, offset, true)
+        }
+        return offset + 4
+    }
+
+    Buffer.prototype.writeInt32BE = function writeInt32BE(value, offset, noAssert) {
+        value = +value
+        offset = offset | 0
+        if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+        if (value < 0) value = 0xffffffff + value + 1
+        if (Buffer.TYPED_ARRAY_SUPPORT) {
+            this[offset] = value >>> 24
+            this[offset + 1] = value >>> 16
+            this[offset + 2] = value >>> 8
+            this[offset + 3] = value & 0xff
+        } else {
+            objectWriteUInt32(this, value, offset, false)
+        }
+        return offset + 4
+    }
+
+    function checkIEEE754(buf, value, offset, ext, max, min) {
+        if (offset + ext > buf.length) throw new RangeError('Index out of range')
+        if (offset < 0) throw new RangeError('Index out of range')
+    }
+
+    function writeFloat(buf, value, offset, littleEndian, noAssert) {
+        if (!noAssert) {
+            checkIEEE754(buf, value, offset, 4)
+        }
+        write(buf, value, offset, littleEndian, 23, 4)
+        return offset + 4
+    }
+
+    Buffer.prototype.writeFloatLE = function writeFloatLE(value, offset, noAssert) {
+        return writeFloat(this, value, offset, true, noAssert)
+    }
+
+    Buffer.prototype.writeFloatBE = function writeFloatBE(value, offset, noAssert) {
+        return writeFloat(this, value, offset, false, noAssert)
+    }
+
+    function writeDouble(buf, value, offset, littleEndian, noAssert) {
+        if (!noAssert) {
+            checkIEEE754(buf, value, offset, 8)
+        }
+        write(buf, value, offset, littleEndian, 52, 8)
+        return offset + 8
+    }
+
+    Buffer.prototype.writeDoubleLE = function writeDoubleLE(value, offset, noAssert) {
+        return writeDouble(this, value, offset, true, noAssert)
+    }
+
+    Buffer.prototype.writeDoubleBE = function writeDoubleBE(value, offset, noAssert) {
+        return writeDouble(this, value, offset, false, noAssert)
+    }
+
+    // copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
+    Buffer.prototype.copy = function copy(target, targetStart, start, end) {
+        if (!start) start = 0
+        if (!end && end !== 0) end = this.length
+        if (targetStart >= target.length) targetStart = target.length
+        if (!targetStart) targetStart = 0
+        if (end > 0 && end < start) end = start
+
+        // Copy 0 bytes; we're done
+        if (end === start) return 0
+        if (target.length === 0 || this.length === 0) return 0
+
+        // Fatal error conditions
+        if (targetStart < 0) {
+            throw new RangeError('targetStart out of bounds')
+        }
+        if (start < 0 || start >= this.length) throw new RangeError('sourceStart out of bounds')
+        if (end < 0) throw new RangeError('sourceEnd out of bounds')
+
+        // Are we oob?
+        if (end > this.length) end = this.length
+        if (target.length - targetStart < end - start) {
+            end = target.length - targetStart + start
+        }
+
+        var len = end - start
+        var i
+
+        if (this === target && start < targetStart && targetStart < end) {
+            // descending copy from end
+            for (i = len - 1; i >= 0; --i) {
+                target[i + targetStart] = this[i + start]
+            }
+        } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
+            // ascending copy from start
+            for (i = 0; i < len; ++i) {
+                target[i + targetStart] = this[i + start]
+            }
+        } else {
+            Uint8Array.prototype.set.call(target, this.subarray(start, start + len), targetStart)
+        }
+
+        return len
+    }
+
+    // Usage:
+    //    buffer.fill(number[, offset[, end]])
+    //    buffer.fill(buffer[, offset[, end]])
+    //    buffer.fill(string[, offset[, end]][, encoding])
+    Buffer.prototype.fill = function fill(val, start, end, encoding) {
+        // Handle string cases:
+        if (typeof val === 'string') {
+            if (typeof start === 'string') {
+                encoding = start
+                start = 0
+                end = this.length
+            } else if (typeof end === 'string') {
+                encoding = end
+                end = this.length
+            }
+            if (val.length === 1) {
+                var code = val.charCodeAt(0)
+                if (code < 256) {
+                    val = code
+                }
+            }
+            if (encoding !== undefined && typeof encoding !== 'string') {
+                throw new TypeError('encoding must be a string')
+            }
+            if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
+                throw new TypeError('Unknown encoding: ' + encoding)
+            }
+        } else if (typeof val === 'number') {
+            val = val & 255
+        }
+
+        // Invalid ranges are not set to a default, so can range check early.
+        if (start < 0 || this.length < start || this.length < end) {
+            throw new RangeError('Out of range index')
+        }
+
+        if (end <= start) {
+            return this
+        }
+
+        start = start >>> 0
+        end = end === undefined ? this.length : end >>> 0
+
+        if (!val) val = 0
+
+        var i
+        if (typeof val === 'number') {
+            for (i = start; i < end; ++i) {
+                this[i] = val
+            }
+        } else {
+            var bytes = internalIsBuffer(val) ? val : utf8ToBytes(new Buffer(val, encoding).toString())
+            var len = bytes.length
+            for (i = 0; i < end - start; ++i) {
+                this[i + start] = bytes[i % len]
+            }
+        }
+
+        return this
+    }
+
+    // HELPER FUNCTIONS
+    // ================
+
+    var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
+
+    function base64clean(str) {
+        // Node strips out invalid characters like \n and \t from the string, base64-js does not
+        str = stringtrim(str).replace(INVALID_BASE64_RE, '')
+        // Node converts strings with length < 2 to ''
+        if (str.length < 2) return ''
+        // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
+        while (str.length % 4 !== 0) {
+            str = str + '='
+        }
+        return str
+    }
+
+    function stringtrim(str) {
+        if (str.trim) return str.trim()
+        return str.replace(/^\s+|\s+$/g, '')
+    }
+
+    function toHex(n) {
+        if (n < 16) return '0' + n.toString(16)
+        return n.toString(16)
+    }
+
+    function utf8ToBytes(string, units) {
+        units = units || Infinity
+        var codePoint
+        var length = string.length
+        var leadSurrogate = null
+        var bytes = []
+
+        for (var i = 0; i < length; ++i) {
+            codePoint = string.charCodeAt(i)
+
+            // is surrogate component
+            if (codePoint > 0xd7ff && codePoint < 0xe000) {
+                // last char was a lead
+                if (!leadSurrogate) {
+                    // no lead yet
+                    if (codePoint > 0xdbff) {
+                        // unexpected trail
+                        if ((units -= 3) > -1) bytes.push(0xef, 0xbf, 0xbd)
+                        continue
+                    } else if (i + 1 === length) {
+                        // unpaired lead
+                        if ((units -= 3) > -1) bytes.push(0xef, 0xbf, 0xbd)
+                        continue
+                    }
+
+                    // valid lead
+                    leadSurrogate = codePoint
+
+                    continue
+                }
+
+                // 2 leads in a row
+                if (codePoint < 0xdc00) {
+                    if ((units -= 3) > -1) bytes.push(0xef, 0xbf, 0xbd)
+                    leadSurrogate = codePoint
+                    continue
+                }
+
+                // valid surrogate pair
+                codePoint = (((leadSurrogate - 0xd800) << 10) | (codePoint - 0xdc00)) + 0x10000
+            } else if (leadSurrogate) {
+                // valid bmp char, but last char was a lead
+                if ((units -= 3) > -1) bytes.push(0xef, 0xbf, 0xbd)
+            }
+
+            leadSurrogate = null
+
+            // encode utf8
+            if (codePoint < 0x80) {
+                if ((units -= 1) < 0) break
+                bytes.push(codePoint)
+            } else if (codePoint < 0x800) {
+                if ((units -= 2) < 0) break
+                bytes.push((codePoint >> 0x6) | 0xc0, (codePoint & 0x3f) | 0x80)
+            } else if (codePoint < 0x10000) {
+                if ((units -= 3) < 0) break
+                bytes.push((codePoint >> 0xc) | 0xe0, ((codePoint >> 0x6) & 0x3f) | 0x80, (codePoint & 0x3f) | 0x80)
+            } else if (codePoint < 0x110000) {
+                if ((units -= 4) < 0) break
+                bytes.push(
+                    (codePoint >> 0x12) | 0xf0,
+                    ((codePoint >> 0xc) & 0x3f) | 0x80,
+                    ((codePoint >> 0x6) & 0x3f) | 0x80,
+                    (codePoint & 0x3f) | 0x80
+                )
+            } else {
+                throw new Error('Invalid code point')
+            }
+        }
+
+        return bytes
+    }
+
+    function asciiToBytes(str) {
+        var byteArray = []
+        for (var i = 0; i < str.length; ++i) {
+            // Node's code seems to be doing this and not & 0x7F..
+            byteArray.push(str.charCodeAt(i) & 0xff)
+        }
+        return byteArray
+    }
+
+    function utf16leToBytes(str, units) {
+        var c, hi, lo
+        var byteArray = []
+        for (var i = 0; i < str.length; ++i) {
+            if ((units -= 2) < 0) break
+
+            c = str.charCodeAt(i)
+            hi = c >> 8
+            lo = c % 256
+            byteArray.push(lo)
+            byteArray.push(hi)
+        }
+
+        return byteArray
+    }
+
+    function base64ToBytes(str) {
+        return toByteArray(base64clean(str))
+    }
+
+    function blitBuffer(src, dst, offset, length) {
+        for (var i = 0; i < length; ++i) {
+            if (i + offset >= dst.length || i >= src.length) break
+            dst[i + offset] = src[i]
+        }
+        return i
+    }
+
+    function isnan(val) {
+        return val !== val // eslint-disable-line no-self-compare
+    }
+
+    // the following is from is-buffer, also by Feross Aboukhadijeh and with same lisence
+    // The _isBuffer check is for Safari 5-7 support, because it's missing
+    // Object.prototype.constructor. Remove this eventually
+    function isBuffer(obj) {
+        return obj != null && (!!obj._isBuffer || isFastBuffer(obj) || isSlowBuffer(obj))
+    }
+
+    function isFastBuffer(obj) {
+        return !!obj.constructor && typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
+    }
+
+    // For Node v0.10 support. Remove this eventually.
+    function isSlowBuffer(obj) {
+        return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isFastBuffer(obj.slice(0, 0))
+    }
+
+    var inherits
+    if (typeof Object.create === 'function') {
+        inherits = function inherits(ctor, superCtor) {
+            // implementation from standard node.js 'util' module
+            ctor.super_ = superCtor
+            ctor.prototype = Object.create(superCtor.prototype, {
+                constructor: {
+                    value: ctor,
+                    enumerable: false,
+                    writable: true,
+                    configurable: true
+                }
+            })
+        }
+    } else {
+        inherits = function inherits(ctor, superCtor) {
+            ctor.super_ = superCtor
+            var TempCtor = function () {}
+            TempCtor.prototype = superCtor.prototype
+            ctor.prototype = new TempCtor()
+            ctor.prototype.constructor = ctor
+        }
+    }
+    var inherits$1 = inherits
+
+    var formatRegExp = /%[sdj%]/g
+    function format(f) {
+        if (!isString(f)) {
+            var objects = []
+            for (var i = 0; i < arguments.length; i++) {
+                objects.push(inspect(arguments[i]))
+            }
+            return objects.join(' ')
+        }
+
+        var i = 1
+        var args = arguments
+        var len = args.length
+        var str = String(f).replace(formatRegExp, function (x) {
+            if (x === '%%') return '%'
+            if (i >= len) return x
+            switch (x) {
+                case '%s':
+                    return String(args[i++])
+                case '%d':
+                    return Number(args[i++])
+                case '%j':
+                    try {
+                        return JSON.stringify(args[i++])
+                    } catch (_) {
+                        return '[Circular]'
+                    }
+                default:
+                    return x
+            }
+        })
+        for (var x = args[i]; i < len; x = args[++i]) {
+            if (isNull(x) || !isObject(x)) {
+                str += ' ' + x
+            } else {
+                str += ' ' + inspect(x)
+            }
+        }
+        return str
+    }
+
+    // Mark that a method should not be used.
+    // Returns a modified function which warns once by default.
+    // If --no-deprecation is set, then it is a no-op.
+    function deprecate(fn, msg) {
+        // Allow for deprecating things in the process of starting up.
+        if (isUndefined(global$1.process)) {
+            return function () {
+                return deprecate(fn, msg).apply(this, arguments)
+            }
+        }
+
+        var warned = false
+        function deprecated() {
+            if (!warned) {
+                {
+                    console.error(msg)
+                }
+                warned = true
+            }
+            return fn.apply(this, arguments)
+        }
+
+        return deprecated
+    }
+
+    var debugs = {}
+    var debugEnviron
+    function debuglog(set) {
+        if (isUndefined(debugEnviron)) debugEnviron = ''
+        set = set.toUpperCase()
+        if (!debugs[set]) {
+            if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
+                var pid = 0
+                debugs[set] = function () {
+                    var msg = format.apply(null, arguments)
+                    console.error('%s %d: %s', set, pid, msg)
+                }
+            } else {
+                debugs[set] = function () {}
+            }
+        }
+        return debugs[set]
+    }
+
+    /**
+     * Echos the value of a value. Trys to print the value out
+     * in the best way possible given the different types.
+     *
+     * @param {Object} obj The object to print out.
+     * @param {Object} opts Optional options object that alters the output.
+     */
+    /* legacy: obj, showHidden, depth, colors*/
+    function inspect(obj, opts) {
+        // default options
+        var ctx = {
+            seen: [],
+            stylize: stylizeNoColor
+        }
+        // legacy...
+        if (arguments.length >= 3) ctx.depth = arguments[2]
+        if (arguments.length >= 4) ctx.colors = arguments[3]
+        if (isBoolean(opts)) {
+            // legacy...
+            ctx.showHidden = opts
+        } else if (opts) {
+            // got an "options" object
+            _extend(ctx, opts)
+        }
+        // set default options
+        if (isUndefined(ctx.showHidden)) ctx.showHidden = false
+        if (isUndefined(ctx.depth)) ctx.depth = 2
+        if (isUndefined(ctx.colors)) ctx.colors = false
+        if (isUndefined(ctx.customInspect)) ctx.customInspect = true
+        if (ctx.colors) ctx.stylize = stylizeWithColor
+        return formatValue(ctx, obj, ctx.depth)
+    }
+
+    // http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
+    inspect.colors = {
+        bold: [1, 22],
+        italic: [3, 23],
+        underline: [4, 24],
+        inverse: [7, 27],
+        white: [37, 39],
+        grey: [90, 39],
+        black: [30, 39],
+        blue: [34, 39],
+        cyan: [36, 39],
+        green: [32, 39],
+        magenta: [35, 39],
+        red: [31, 39],
+        yellow: [33, 39]
+    }
+
+    // Don't use 'blue' not visible on cmd.exe
+    inspect.styles = {
+        special: 'cyan',
+        number: 'yellow',
+        boolean: 'yellow',
+        undefined: 'grey',
+        null: 'bold',
+        string: 'green',
+        date: 'magenta',
+        // "name": intentionally not styling
+        regexp: 'red'
+    }
+
+    function stylizeWithColor(str, styleType) {
+        var style = inspect.styles[styleType]
+
+        if (style) {
+            return '\u001b[' + inspect.colors[style][0] + 'm' + str + '\u001b[' + inspect.colors[style][1] + 'm'
+        } else {
+            return str
+        }
+    }
+
+    function stylizeNoColor(str, styleType) {
+        return str
+    }
+
+    function arrayToHash(array) {
+        var hash = {}
+
+        array.forEach(function (val, idx) {
+            hash[val] = true
+        })
+
+        return hash
+    }
+
+    function formatValue(ctx, value, recurseTimes) {
+        // Provide a hook for user-specified inspect functions.
+        // Check that value is an object with an inspect function on it
+        if (
+            ctx.customInspect &&
+            value &&
+            isFunction(value.inspect) &&
+            // Filter out the util module, it's inspect function is special
+            value.inspect !== inspect &&
+            // Also filter out any prototype objects using the circular check.
+            !(value.constructor && value.constructor.prototype === value)
+        ) {
+            var ret = value.inspect(recurseTimes, ctx)
+            if (!isString(ret)) {
+                ret = formatValue(ctx, ret, recurseTimes)
+            }
+            return ret
+        }
+
+        // Primitive types cannot have properties
+        var primitive = formatPrimitive(ctx, value)
+        if (primitive) {
+            return primitive
+        }
+
+        // Look up the keys of the object.
+        var keys = Object.keys(value)
+        var visibleKeys = arrayToHash(keys)
+
+        if (ctx.showHidden) {
+            keys = Object.getOwnPropertyNames(value)
+        }
+
+        // IE doesn't make error fields non-enumerable
+        // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
+        if (isError(value) && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
+            return formatError(value)
+        }
+
+        // Some type of object without properties can be shortcutted.
+        if (keys.length === 0) {
+            if (isFunction(value)) {
+                var name = value.name ? ': ' + value.name : ''
+                return ctx.stylize('[Function' + name + ']', 'special')
+            }
+            if (isRegExp(value)) {
+                return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp')
+            }
+            if (isDate(value)) {
+                return ctx.stylize(Date.prototype.toString.call(value), 'date')
+            }
+            if (isError(value)) {
+                return formatError(value)
+            }
+        }
+
+        var base = '',
+            array = false,
+            braces = ['{', '}']
+
+        // Make Array say that they are Array
+        if (isArray$1(value)) {
+            array = true
+            braces = ['[', ']']
+        }
+
+        // Make functions say that they are functions
+        if (isFunction(value)) {
+            var n = value.name ? ': ' + value.name : ''
+            base = ' [Function' + n + ']'
+        }
+
+        // Make RegExps say that they are RegExps
+        if (isRegExp(value)) {
+            base = ' ' + RegExp.prototype.toString.call(value)
+        }
+
+        // Make dates with properties first say the date
+        if (isDate(value)) {
+            base = ' ' + Date.prototype.toUTCString.call(value)
+        }
+
+        // Make error with message first say the error
+        if (isError(value)) {
+            base = ' ' + formatError(value)
+        }
+
+        if (keys.length === 0 && (!array || value.length == 0)) {
+            return braces[0] + base + braces[1]
+        }
+
+        if (recurseTimes < 0) {
+            if (isRegExp(value)) {
+                return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp')
+            } else {
+                return ctx.stylize('[Object]', 'special')
+            }
+        }
+
+        ctx.seen.push(value)
+
+        var output
+        if (array) {
+            output = formatArray(ctx, value, recurseTimes, visibleKeys, keys)
+        } else {
+            output = keys.map(function (key) {
+                return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array)
+            })
+        }
+
+        ctx.seen.pop()
+
+        return reduceToSingleString(output, base, braces)
+    }
+
+    function formatPrimitive(ctx, value) {
+        if (isUndefined(value)) return ctx.stylize('undefined', 'undefined')
+        if (isString(value)) {
+            var simple =
+                "'" + JSON.stringify(value).replace(/^"|"$/g, '').replace(/'/g, "\\'").replace(/\\"/g, '"') + "'"
+            return ctx.stylize(simple, 'string')
+        }
+        if (isNumber(value)) return ctx.stylize('' + value, 'number')
+        if (isBoolean(value)) return ctx.stylize('' + value, 'boolean')
+        // For some reason typeof null is "object", so special case here.
+        if (isNull(value)) return ctx.stylize('null', 'null')
+    }
+
+    function formatError(value) {
+        return '[' + Error.prototype.toString.call(value) + ']'
+    }
+
+    function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
+        var output = []
+        for (var i = 0, l = value.length; i < l; ++i) {
+            if (hasOwnProperty(value, String(i))) {
+                output.push(formatProperty(ctx, value, recurseTimes, visibleKeys, String(i), true))
+            } else {
+                output.push('')
+            }
+        }
+        keys.forEach(function (key) {
+            if (!key.match(/^\d+$/)) {
+                output.push(formatProperty(ctx, value, recurseTimes, visibleKeys, key, true))
+            }
+        })
+        return output
+    }
+
+    function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
+        var name, str, desc
+        desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] }
+        if (desc.get) {
+            if (desc.set) {
+                str = ctx.stylize('[Getter/Setter]', 'special')
+            } else {
+                str = ctx.stylize('[Getter]', 'special')
+            }
+        } else {
+            if (desc.set) {
+                str = ctx.stylize('[Setter]', 'special')
+            }
+        }
+        if (!hasOwnProperty(visibleKeys, key)) {
+            name = '[' + key + ']'
+        }
+        if (!str) {
+            if (ctx.seen.indexOf(desc.value) < 0) {
+                if (isNull(recurseTimes)) {
+                    str = formatValue(ctx, desc.value, null)
+                } else {
+                    str = formatValue(ctx, desc.value, recurseTimes - 1)
+                }
+                if (str.indexOf('\n') > -1) {
+                    if (array) {
+                        str = str
+                            .split('\n')
+                            .map(function (line) {
+                                return '  ' + line
+                            })
+                            .join('\n')
+                            .substr(2)
+                    } else {
+                        str =
+                            '\n' +
+                            str
+                                .split('\n')
+                                .map(function (line) {
+                                    return '   ' + line
+                                })
+                                .join('\n')
+                    }
+                }
+            } else {
+                str = ctx.stylize('[Circular]', 'special')
+            }
+        }
+        if (isUndefined(name)) {
+            if (array && key.match(/^\d+$/)) {
+                return str
+            }
+            name = JSON.stringify('' + key)
+            if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
+                name = name.substr(1, name.length - 2)
+                name = ctx.stylize(name, 'name')
+            } else {
+                name = name
+                    .replace(/'/g, "\\'")
+                    .replace(/\\"/g, '"')
+                    .replace(/(^"|"$)/g, "'")
+                name = ctx.stylize(name, 'string')
+            }
+        }
+
+        return name + ': ' + str
+    }
+
+    function reduceToSingleString(output, base, braces) {
+        var length = output.reduce(function (prev, cur) {
+            if (cur.indexOf('\n') >= 0);
+            return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1
+        }, 0)
+
+        if (length > 60) {
+            return braces[0] + (base === '' ? '' : base + '\n ') + ' ' + output.join(',\n  ') + ' ' + braces[1]
+        }
+
+        return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1]
+    }
+
+    // NOTE: These type checking functions intentionally don't use `instanceof`
+    // because it is fragile and can be easily faked with `Object.create()`.
+    function isArray$1(ar) {
+        return Array.isArray(ar)
+    }
+
+    function isBoolean(arg) {
+        return typeof arg === 'boolean'
+    }
+
+    function isNull(arg) {
+        return arg === null
+    }
+
+    function isNullOrUndefined(arg) {
+        return arg == null
+    }
+
+    function isNumber(arg) {
+        return typeof arg === 'number'
+    }
+
+    function isString(arg) {
+        return typeof arg === 'string'
+    }
+
+    function isSymbol(arg) {
+        return typeof arg === 'symbol'
+    }
+
+    function isUndefined(arg) {
+        return arg === void 0
+    }
+
+    function isRegExp(re) {
+        return isObject(re) && objectToString(re) === '[object RegExp]'
+    }
+
+    function isObject(arg) {
+        return typeof arg === 'object' && arg !== null
+    }
+
+    function isDate(d) {
+        return isObject(d) && objectToString(d) === '[object Date]'
+    }
+
+    function isError(e) {
+        return isObject(e) && (objectToString(e) === '[object Error]' || e instanceof Error)
+    }
+
+    function isFunction(arg) {
+        return typeof arg === 'function'
+    }
+
+    function isPrimitive(arg) {
+        return (
+            arg === null ||
+            typeof arg === 'boolean' ||
+            typeof arg === 'number' ||
+            typeof arg === 'string' ||
+            typeof arg === 'symbol' || // ES6 symbol
+            typeof arg === 'undefined'
+        )
+    }
+
+    function isBuffer$1(maybeBuf) {
+        return Buffer.isBuffer(maybeBuf)
+    }
+
+    function objectToString(o) {
+        return Object.prototype.toString.call(o)
+    }
+
+    function pad(n) {
+        return n < 10 ? '0' + n.toString(10) : n.toString(10)
+    }
+
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+    // 26 Feb 16:19:34
+    function timestamp() {
+        var d = new Date()
+        var time = [pad(d.getHours()), pad(d.getMinutes()), pad(d.getSeconds())].join(':')
+        return [d.getDate(), months[d.getMonth()], time].join(' ')
+    }
+
+    // log is just a thin wrapper to console.log that prepends a timestamp
+    function log() {
+        console.log('%s - %s', timestamp(), format.apply(null, arguments))
+    }
+
+    function _extend(origin, add) {
+        // Don't do anything if add isn't an object
+        if (!add || !isObject(add)) return origin
+
+        var keys = Object.keys(add)
+        var i = keys.length
+        while (i--) {
+            origin[keys[i]] = add[keys[i]]
+        }
+        return origin
+    }
+    function hasOwnProperty(obj, prop) {
+        return Object.prototype.hasOwnProperty.call(obj, prop)
+    }
+
+    var util = {
+        inherits: inherits$1,
+        _extend: _extend,
+        log: log,
+        isBuffer: isBuffer$1,
+        isPrimitive: isPrimitive,
+        isFunction: isFunction,
+        isError: isError,
+        isDate: isDate,
+        isObject: isObject,
+        isRegExp: isRegExp,
+        isUndefined: isUndefined,
+        isSymbol: isSymbol,
+        isString: isString,
+        isNumber: isNumber,
+        isNullOrUndefined: isNullOrUndefined,
+        isNull: isNull,
+        isBoolean: isBoolean,
+        isArray: isArray$1,
+        inspect: inspect,
+        deprecate: deprecate,
+        format: format,
+        debuglog: debuglog
+    }
+
+    /*
+    	MIT License http://www.opensource.org/licenses/mit-license.php
+    	Author Tobias Koppers @sokra
+    */
+
+    class Hook {
+        constructor(args) {
+            if (!Array.isArray(args)) args = []
+            this._args = args
+            this.taps = []
+            this.interceptors = []
+            this.call = this._call
+            this.promise = this._promise
+            this.callAsync = this._callAsync
+            this._x = undefined
+        }
+
+        compile(options) {
+            throw new Error('Abstract: should be overriden')
+        }
+
+        _createCall(type) {
+            return this.compile({
+                taps: this.taps,
+                interceptors: this.interceptors,
+                args: this._args,
+                type: type
+            })
+        }
+
+        tap(options, fn) {
+            if (typeof options === 'string') options = { name: options }
+            if (typeof options !== 'object' || options === null)
+                throw new Error('Invalid arguments to tap(options: Object, fn: function)')
+            options = Object.assign({ type: 'sync', fn: fn }, options)
+            if (typeof options.name !== 'string' || options.name === '') throw new Error('Missing name for tap')
+            options = this._runRegisterInterceptors(options)
+            this._insert(options)
+        }
+
+        tapAsync(options, fn) {
+            if (typeof options === 'string') options = { name: options }
+            if (typeof options !== 'object' || options === null)
+                throw new Error('Invalid arguments to tapAsync(options: Object, fn: function)')
+            options = Object.assign({ type: 'async', fn: fn }, options)
+            if (typeof options.name !== 'string' || options.name === '') throw new Error('Missing name for tapAsync')
+            options = this._runRegisterInterceptors(options)
+            this._insert(options)
+        }
+
+        tapPromise(options, fn) {
+            if (typeof options === 'string') options = { name: options }
+            if (typeof options !== 'object' || options === null)
+                throw new Error('Invalid arguments to tapPromise(options: Object, fn: function)')
+            options = Object.assign({ type: 'promise', fn: fn }, options)
+            if (typeof options.name !== 'string' || options.name === '') throw new Error('Missing name for tapPromise')
+            options = this._runRegisterInterceptors(options)
+            this._insert(options)
+        }
+
+        _runRegisterInterceptors(options) {
+            for (const interceptor of this.interceptors) {
+                if (interceptor.register) {
+                    const newOptions = interceptor.register(options)
+                    if (newOptions !== undefined) options = newOptions
+                }
+            }
+            return options
+        }
+
+        withOptions(options) {
+            const mergeOptions = opt => Object.assign({}, options, typeof opt === 'string' ? { name: opt } : opt)
+
+            // Prevent creating endless prototype chains
+            options = Object.assign({}, options, this._withOptions)
+            const base = this._withOptionsBase || this
+            const newHook = Object.create(base)
+
+            ;(newHook.tapAsync = (opt, fn) => base.tapAsync(mergeOptions(opt), fn)),
+                (newHook.tap = (opt, fn) => base.tap(mergeOptions(opt), fn))
+            newHook.tapPromise = (opt, fn) => base.tapPromise(mergeOptions(opt), fn)
+            newHook._withOptions = options
+            newHook._withOptionsBase = base
+            return newHook
+        }
+
+        isUsed() {
+            return this.taps.length > 0 || this.interceptors.length > 0
+        }
+
+        intercept(interceptor) {
+            this._resetCompilation()
+            this.interceptors.push(Object.assign({}, interceptor))
+            if (interceptor.register) {
+                for (let i = 0; i < this.taps.length; i++) this.taps[i] = interceptor.register(this.taps[i])
+            }
+        }
+
+        _resetCompilation() {
+            this.call = this._call
+            this.callAsync = this._callAsync
+            this.promise = this._promise
+        }
+
+        _insert(item) {
+            this._resetCompilation()
+            let before
+            if (typeof item.before === 'string') before = new Set([item.before])
+            else if (Array.isArray(item.before)) {
+                before = new Set(item.before)
+            }
+            let stage = 0
+            if (typeof item.stage === 'number') stage = item.stage
+            let i = this.taps.length
+            while (i > 0) {
+                i--
+                const x = this.taps[i]
+                this.taps[i + 1] = x
+                const xStage = x.stage || 0
+                if (before) {
+                    if (before.has(x.name)) {
+                        before.delete(x.name)
+                        continue
+                    }
+                    if (before.size > 0) {
+                        continue
+                    }
+                }
+                if (xStage > stage) {
+                    continue
+                }
+                i++
+                break
+            }
+            this.taps[i] = item
+        }
+    }
+
+    function createCompileDelegate(name, type) {
+        return function lazyCompileHook(...args) {
+            this[name] = this._createCall(type)
+            return this[name](...args)
+        }
+    }
+
+    Object.defineProperties(Hook.prototype, {
+        _call: {
+            value: createCompileDelegate('call', 'sync'),
+            configurable: true,
+            writable: true
+        },
+        _promise: {
+            value: createCompileDelegate('promise', 'promise'),
+            configurable: true,
+            writable: true
+        },
+        _callAsync: {
+            value: createCompileDelegate('callAsync', 'async'),
+            configurable: true,
+            writable: true
+        }
+    })
+
+    var Hook_1 = Hook
+
+    /*
+    	MIT License http://www.opensource.org/licenses/mit-license.php
+    	Author Tobias Koppers @sokra
+    */
+
+    class HookCodeFactory {
+        constructor(config) {
+            this.config = config
+            this.options = undefined
+            this._args = undefined
+        }
+
+        create(options) {
+            this.init(options)
+            let fn
+            switch (this.options.type) {
+                case 'sync':
+                    fn = new Function(
+                        this.args(),
+                        '"use strict";\n' +
+                            this.header() +
+                            this.content({
+                                onError: err => `throw ${err};\n`,
+                                onResult: result => `return ${result};\n`,
+                                resultReturns: true,
+                                onDone: () => '',
+                                rethrowIfPossible: true
+                            })
+                    )
+                    break
+                case 'async':
+                    fn = new Function(
+                        this.args({
+                            after: '_callback'
+                        }),
+                        '"use strict";\n' +
+                            this.header() +
+                            this.content({
+                                onError: err => `_callback(${err});\n`,
+                                onResult: result => `_callback(null, ${result});\n`,
+                                onDone: () => '_callback();\n'
+                            })
+                    )
+                    break
+                case 'promise':
+                    let errorHelperUsed = false
+                    const content = this.content({
+                        onError: err => {
+                            errorHelperUsed = true
+                            return `_error(${err});\n`
+                        },
+                        onResult: result => `_resolve(${result});\n`,
+                        onDone: () => '_resolve();\n'
+                    })
+                    let code = ''
+                    code += '"use strict";\n'
+                    code += 'return new Promise((_resolve, _reject) => {\n'
+                    if (errorHelperUsed) {
+                        code += 'var _sync = true;\n'
+                        code += 'function _error(_err) {\n'
+                        code += 'if(_sync)\n'
+                        code += '_resolve(Promise.resolve().then(() => { throw _err; }));\n'
+                        code += 'else\n'
+                        code += '_reject(_err);\n'
+                        code += '};\n'
+                    }
+                    code += this.header()
+                    code += content
+                    if (errorHelperUsed) {
+                        code += '_sync = false;\n'
+                    }
+                    code += '});\n'
+                    fn = new Function(this.args(), code)
+                    break
+            }
+            this.deinit()
+            return fn
+        }
+
+        setup(instance, options) {
+            instance._x = options.taps.map(t => t.fn)
+        }
+
+        /**
+         * @param {{ type: "sync" | "promise" | "async", taps: Array<Tap>, interceptors: Array<Interceptor> }} options
+         */
+        init(options) {
+            this.options = options
+            this._args = options.args.slice()
+        }
+
+        deinit() {
+            this.options = undefined
+            this._args = undefined
+        }
+
+        header() {
+            let code = ''
+            if (this.needContext()) {
+                code += 'var _context = {};\n'
+            } else {
+                code += 'var _context;\n'
+            }
+            code += 'var _x = this._x;\n'
+            if (this.options.interceptors.length > 0) {
+                code += 'var _taps = this.taps;\n'
+                code += 'var _interceptors = this.interceptors;\n'
+            }
+            for (let i = 0; i < this.options.interceptors.length; i++) {
+                const interceptor = this.options.interceptors[i]
+                if (interceptor.call) {
+                    code += `${this.getInterceptor(i)}.call(${this.args({
+                        before: interceptor.context ? '_context' : undefined
+                    })});\n`
+                }
+            }
+            return code
+        }
+
+        needContext() {
+            for (const tap of this.options.taps) if (tap.context) return true
+            return false
+        }
+
+        callTap(tapIndex, { onError, onResult, onDone, rethrowIfPossible }) {
+            let code = ''
+            let hasTapCached = false
+            for (let i = 0; i < this.options.interceptors.length; i++) {
+                const interceptor = this.options.interceptors[i]
+                if (interceptor.tap) {
+                    if (!hasTapCached) {
+                        code += `var _tap${tapIndex} = ${this.getTap(tapIndex)};\n`
+                        hasTapCached = true
+                    }
+                    code += `${this.getInterceptor(i)}.tap(${
+                        interceptor.context ? '_context, ' : ''
+                    }_tap${tapIndex});\n`
+                }
+            }
+            code += `var _fn${tapIndex} = ${this.getTapFn(tapIndex)};\n`
+            const tap = this.options.taps[tapIndex]
+            switch (tap.type) {
+                case 'sync':
+                    if (!rethrowIfPossible) {
+                        code += `var _hasError${tapIndex} = false;\n`
+                        code += 'try {\n'
+                    }
+                    if (onResult) {
+                        code += `var _result${tapIndex} = _fn${tapIndex}(${this.args({
+                            before: tap.context ? '_context' : undefined
+                        })});\n`
+                    } else {
+                        code += `_fn${tapIndex}(${this.args({
+                            before: tap.context ? '_context' : undefined
+                        })});\n`
+                    }
+                    if (!rethrowIfPossible) {
+                        code += '} catch(_err) {\n'
+                        code += `_hasError${tapIndex} = true;\n`
+                        code += onError('_err')
+                        code += '}\n'
+                        code += `if(!_hasError${tapIndex}) {\n`
+                    }
+                    if (onResult) {
+                        code += onResult(`_result${tapIndex}`)
+                    }
+                    if (onDone) {
+                        code += onDone()
+                    }
+                    if (!rethrowIfPossible) {
+                        code += '}\n'
+                    }
+                    break
+                case 'async':
+                    let cbCode = ''
+                    if (onResult) cbCode += `(_err${tapIndex}, _result${tapIndex}) => {\n`
+                    else cbCode += `_err${tapIndex} => {\n`
+                    cbCode += `if(_err${tapIndex}) {\n`
+                    cbCode += onError(`_err${tapIndex}`)
+                    cbCode += '} else {\n'
+                    if (onResult) {
+                        cbCode += onResult(`_result${tapIndex}`)
+                    }
+                    if (onDone) {
+                        cbCode += onDone()
+                    }
+                    cbCode += '}\n'
+                    cbCode += '}'
+                    code += `_fn${tapIndex}(${this.args({
+                        before: tap.context ? '_context' : undefined,
+                        after: cbCode
+                    })});\n`
+                    break
+                case 'promise':
+                    code += `var _hasResult${tapIndex} = false;\n`
+                    code += `var _promise${tapIndex} = _fn${tapIndex}(${this.args({
+                        before: tap.context ? '_context' : undefined
+                    })});\n`
+                    code += `if (!_promise${tapIndex} || !_promise${tapIndex}.then)\n`
+                    code += `  throw new Error('Tap function (tapPromise) did not return promise (returned ' + _promise${tapIndex} + ')');\n`
+                    code += `_promise${tapIndex}.then(_result${tapIndex} => {\n`
+                    code += `_hasResult${tapIndex} = true;\n`
+                    if (onResult) {
+                        code += onResult(`_result${tapIndex}`)
+                    }
+                    if (onDone) {
+                        code += onDone()
+                    }
+                    code += `}, _err${tapIndex} => {\n`
+                    code += `if(_hasResult${tapIndex}) throw _err${tapIndex};\n`
+                    code += onError(`_err${tapIndex}`)
+                    code += '});\n'
+                    break
+            }
+            return code
+        }
+
+        callTapsSeries({ onError, onResult, resultReturns, onDone, doneReturns, rethrowIfPossible }) {
+            if (this.options.taps.length === 0) return onDone()
+            const firstAsync = this.options.taps.findIndex(t => t.type !== 'sync')
+            const somethingReturns = resultReturns || doneReturns || false
+            let code = ''
+            let current = onDone
+            for (let j = this.options.taps.length - 1; j >= 0; j--) {
+                const i = j
+                const unroll = current !== onDone && this.options.taps[i].type !== 'sync'
+                if (unroll) {
+                    code += `function _next${i}() {\n`
+                    code += current()
+                    code += `}\n`
+                    current = () => `${somethingReturns ? 'return ' : ''}_next${i}();\n`
+                }
+                const done = current
+                const doneBreak = skipDone => {
+                    if (skipDone) return ''
+                    return onDone()
+                }
+                const content = this.callTap(i, {
+                    onError: error => onError(i, error, done, doneBreak),
+                    onResult:
+                        onResult &&
+                        (result => {
+                            return onResult(i, result, done, doneBreak)
+                        }),
+                    onDone: !onResult && done,
+                    rethrowIfPossible: rethrowIfPossible && (firstAsync < 0 || i < firstAsync)
+                })
+                current = () => content
+            }
+            code += current()
+            return code
+        }
+
+        callTapsLooping({ onError, onDone, rethrowIfPossible }) {
+            if (this.options.taps.length === 0) return onDone()
+            const syncOnly = this.options.taps.every(t => t.type === 'sync')
+            let code = ''
+            if (!syncOnly) {
+                code += 'var _looper = () => {\n'
+                code += 'var _loopAsync = false;\n'
+            }
+            code += 'var _loop;\n'
+            code += 'do {\n'
+            code += '_loop = false;\n'
+            for (let i = 0; i < this.options.interceptors.length; i++) {
+                const interceptor = this.options.interceptors[i]
+                if (interceptor.loop) {
+                    code += `${this.getInterceptor(i)}.loop(${this.args({
+                        before: interceptor.context ? '_context' : undefined
+                    })});\n`
+                }
+            }
+            code += this.callTapsSeries({
+                onError,
+                onResult: (i, result, next, doneBreak) => {
+                    let code = ''
+                    code += `if(${result} !== undefined) {\n`
+                    code += '_loop = true;\n'
+                    if (!syncOnly) code += 'if(_loopAsync) _looper();\n'
+                    code += doneBreak(true)
+                    code += `} else {\n`
+                    code += next()
+                    code += `}\n`
+                    return code
+                },
+                onDone:
+                    onDone &&
+                    (() => {
+                        let code = ''
+                        code += 'if(!_loop) {\n'
+                        code += onDone()
+                        code += '}\n'
+                        return code
+                    }),
+                rethrowIfPossible: rethrowIfPossible && syncOnly
+            })
+            code += '} while(_loop);\n'
+            if (!syncOnly) {
+                code += '_loopAsync = true;\n'
+                code += '};\n'
+                code += '_looper();\n'
+            }
+            return code
+        }
+
+        callTapsParallel({ onError, onResult, onDone, rethrowIfPossible, onTap = (i, run) => run() }) {
+            if (this.options.taps.length <= 1) {
+                return this.callTapsSeries({
+                    onError,
+                    onResult,
+                    onDone,
+                    rethrowIfPossible
+                })
+            }
+            let code = ''
+            code += 'do {\n'
+            code += `var _counter = ${this.options.taps.length};\n`
+            if (onDone) {
+                code += 'var _done = () => {\n'
+                code += onDone()
+                code += '};\n'
+            }
+            for (let i = 0; i < this.options.taps.length; i++) {
+                const done = () => {
+                    if (onDone) return 'if(--_counter === 0) _done();\n'
+                    else return '--_counter;'
+                }
+                const doneBreak = skipDone => {
+                    if (skipDone || !onDone) return '_counter = 0;\n'
+                    else return '_counter = 0;\n_done();\n'
+                }
+                code += 'if(_counter <= 0) break;\n'
+                code += onTap(
+                    i,
+                    () =>
+                        this.callTap(i, {
+                            onError: error => {
+                                let code = ''
+                                code += 'if(_counter > 0) {\n'
+                                code += onError(i, error, done, doneBreak)
+                                code += '}\n'
+                                return code
+                            },
+                            onResult:
+                                onResult &&
+                                (result => {
+                                    let code = ''
+                                    code += 'if(_counter > 0) {\n'
+                                    code += onResult(i, result, done, doneBreak)
+                                    code += '}\n'
+                                    return code
+                                }),
+                            onDone:
+                                !onResult &&
+                                (() => {
+                                    return done()
+                                }),
+                            rethrowIfPossible
+                        }),
+                    done,
+                    doneBreak
+                )
+            }
+            code += '} while(false);\n'
+            return code
+        }
+
+        args({ before, after } = {}) {
+            let allArgs = this._args
+            if (before) allArgs = [before].concat(allArgs)
+            if (after) allArgs = allArgs.concat(after)
+            if (allArgs.length === 0) {
+                return ''
+            } else {
+                return allArgs.join(', ')
+            }
+        }
+
+        getTapFn(idx) {
+            return `_x[${idx}]`
+        }
+
+        getTap(idx) {
+            return `_taps[${idx}]`
+        }
+
+        getInterceptor(idx) {
+            return `_interceptors[${idx}]`
+        }
+    }
+
+    var HookCodeFactory_1 = HookCodeFactory
+
+    class SyncBailHookCodeFactory extends HookCodeFactory_1 {
+        content({ onError, onResult, resultReturns, onDone, rethrowIfPossible }) {
+            return this.callTapsSeries({
+                onError: (i, err) => onError(err),
+                onResult: (i, result, next) =>
+                    `if(${result} !== undefined) {\n${onResult(result)};\n} else {\n${next()}}\n`,
+                resultReturns,
+                onDone,
+                rethrowIfPossible
+            })
+        }
+    }
+
+    const factory = new SyncBailHookCodeFactory()
+
+    class SyncBailHook extends Hook_1 {
+        tapAsync() {
+            throw new Error('tapAsync is not supported on a SyncBailHook')
+        }
+
+        tapPromise() {
+            throw new Error('tapPromise is not supported on a SyncBailHook')
+        }
+
+        compile(options) {
+            factory.setup(this, options)
+            return factory.create(options)
+        }
+    }
+
+    var SyncBailHook_1 = SyncBailHook
+
+    function Tapable() {
+        this._pluginCompat = new SyncBailHook_1(['options'])
+        this._pluginCompat.tap(
+            {
+                name: 'Tapable camelCase',
+                stage: 100
+            },
+            options => {
+                options.names.add(options.name.replace(/[- ]([a-z])/g, (str, ch) => ch.toUpperCase()))
+            }
+        )
+        this._pluginCompat.tap(
+            {
+                name: 'Tapable this.hooks',
+                stage: 200
+            },
+            options => {
+                let hook
+                for (const name of options.names) {
+                    hook = this.hooks[name]
+                    if (hook !== undefined) {
+                        break
+                    }
+                }
+                if (hook !== undefined) {
+                    const tapOpt = {
+                        name: options.fn.name || 'unnamed compat plugin',
+                        stage: options.stage || 0
+                    }
+                    if (options.async) hook.tapAsync(tapOpt, options.fn)
+                    else hook.tap(tapOpt, options.fn)
+                    return true
+                }
+            }
+        )
+    }
+    var Tapable_1 = Tapable
+
+    Tapable.addCompatLayer = function addCompatLayer(instance) {
+        Tapable.call(instance)
+        instance.plugin = Tapable.prototype.plugin
+        instance.apply = Tapable.prototype.apply
+    }
+
+    Tapable.prototype.plugin = util.deprecate(function plugin(name, fn) {
+        if (Array.isArray(name)) {
+            name.forEach(function (name) {
+                this.plugin(name, fn)
+            }, this)
+            return
+        }
+        const result = this._pluginCompat.call({
+            name: name,
+            fn: fn,
+            names: new Set([name])
+        })
+        if (!result) {
+            throw new Error(
+                `Plugin could not be registered at '${name}'. Hook was not found.\n` +
+                    "BREAKING CHANGE: There need to exist a hook at 'this.hooks'. " +
+                    "To create a compatibility layer for this hook, hook into 'this._pluginCompat'."
+            )
+        }
+    }, 'Tapable.plugin is deprecated. Use new API on `.hooks` instead')
+
+    Tapable.prototype.apply = util.deprecate(function apply() {
+        for (var i = 0; i < arguments.length; i++) {
+            arguments[i].apply(this)
+        }
+    }, 'Tapable.apply is deprecated. Call apply on the plugin directly instead')
+
+    class SyncHookCodeFactory extends HookCodeFactory_1 {
+        content({ onError, onDone, rethrowIfPossible }) {
+            return this.callTapsSeries({
+                onError: (i, err) => onError(err),
+                onDone,
+                rethrowIfPossible
+            })
+        }
+    }
+
+    const factory$1 = new SyncHookCodeFactory()
+
+    class SyncHook extends Hook_1 {
+        tapAsync() {
+            throw new Error('tapAsync is not supported on a SyncHook')
+        }
+
+        tapPromise() {
+            throw new Error('tapPromise is not supported on a SyncHook')
+        }
+
+        compile(options) {
+            factory$1.setup(this, options)
+            return factory$1.create(options)
+        }
+    }
+
+    var SyncHook_1 = SyncHook
+
+    class SyncWaterfallHookCodeFactory extends HookCodeFactory_1 {
+        content({ onError, onResult, resultReturns, rethrowIfPossible }) {
+            return this.callTapsSeries({
+                onError: (i, err) => onError(err),
+                onResult: (i, result, next) => {
+                    let code = ''
+                    code += `if(${result} !== undefined) {\n`
+                    code += `${this._args[0]} = ${result};\n`
+                    code += `}\n`
+                    code += next()
+                    return code
+                },
+                onDone: () => onResult(this._args[0]),
+                doneReturns: resultReturns,
+                rethrowIfPossible
+            })
+        }
+    }
+
+    const factory$2 = new SyncWaterfallHookCodeFactory()
+
+    class SyncWaterfallHook extends Hook_1 {
+        constructor(args) {
+            super(args)
+            if (args.length < 1) throw new Error('Waterfall hooks must have at least one argument')
+        }
+
+        tapAsync() {
+            throw new Error('tapAsync is not supported on a SyncWaterfallHook')
+        }
+
+        tapPromise() {
+            throw new Error('tapPromise is not supported on a SyncWaterfallHook')
+        }
+
+        compile(options) {
+            factory$2.setup(this, options)
+            return factory$2.create(options)
+        }
+    }
+
+    var SyncWaterfallHook_1 = SyncWaterfallHook
+
+    class SyncLoopHookCodeFactory extends HookCodeFactory_1 {
+        content({ onError, onDone, rethrowIfPossible }) {
+            return this.callTapsLooping({
+                onError: (i, err) => onError(err),
+                onDone,
+                rethrowIfPossible
+            })
+        }
+    }
+
+    const factory$3 = new SyncLoopHookCodeFactory()
+
+    class SyncLoopHook extends Hook_1 {
+        tapAsync() {
+            throw new Error('tapAsync is not supported on a SyncLoopHook')
+        }
+
+        tapPromise() {
+            throw new Error('tapPromise is not supported on a SyncLoopHook')
+        }
+
+        compile(options) {
+            factory$3.setup(this, options)
+            return factory$3.create(options)
+        }
+    }
+
+    var SyncLoopHook_1 = SyncLoopHook
+
+    class AsyncParallelHookCodeFactory extends HookCodeFactory_1 {
+        content({ onError, onDone }) {
+            return this.callTapsParallel({
+                onError: (i, err, done, doneBreak) => onError(err) + doneBreak(true),
+                onDone
+            })
+        }
+    }
+
+    const factory$4 = new AsyncParallelHookCodeFactory()
+
+    class AsyncParallelHook extends Hook_1 {
+        compile(options) {
+            factory$4.setup(this, options)
+            return factory$4.create(options)
+        }
+    }
+
+    Object.defineProperties(AsyncParallelHook.prototype, {
+        _call: { value: undefined, configurable: true, writable: true }
+    })
+
+    var AsyncParallelHook_1 = AsyncParallelHook
+
+    class AsyncParallelBailHookCodeFactory extends HookCodeFactory_1 {
+        content({ onError, onResult, onDone }) {
+            let code = ''
+            code += `var _results = new Array(${this.options.taps.length});\n`
+            code += 'var _checkDone = () => {\n'
+            code += 'for(var i = 0; i < _results.length; i++) {\n'
+            code += 'var item = _results[i];\n'
+            code += 'if(item === undefined) return false;\n'
+            code += 'if(item.result !== undefined) {\n'
+            code += onResult('item.result')
+            code += 'return true;\n'
+            code += '}\n'
+            code += 'if(item.error) {\n'
+            code += onError('item.error')
+            code += 'return true;\n'
+            code += '}\n'
+            code += '}\n'
+            code += 'return false;\n'
+            code += '}\n'
+            code += this.callTapsParallel({
+                onError: (i, err, done, doneBreak) => {
+                    let code = ''
+                    code += `if(${i} < _results.length && ((_results.length = ${
+                        i + 1
+                    }), (_results[${i}] = { error: ${err} }), _checkDone())) {\n`
+                    code += doneBreak(true)
+                    code += '} else {\n'
+                    code += done()
+                    code += '}\n'
+                    return code
+                },
+                onResult: (i, result, done, doneBreak) => {
+                    let code = ''
+                    code += `if(${i} < _results.length && (${result} !== undefined && (_results.length = ${
+                        i + 1
+                    }), (_results[${i}] = { result: ${result} }), _checkDone())) {\n`
+                    code += doneBreak(true)
+                    code += '} else {\n'
+                    code += done()
+                    code += '}\n'
+                    return code
+                },
+                onTap: (i, run, done, doneBreak) => {
+                    let code = ''
+                    if (i > 0) {
+                        code += `if(${i} >= _results.length) {\n`
+                        code += done()
+                        code += '} else {\n'
+                    }
+                    code += run()
+                    if (i > 0) code += '}\n'
+                    return code
+                },
+                onDone
+            })
+            return code
+        }
+    }
+
+    const factory$5 = new AsyncParallelBailHookCodeFactory()
+
+    class AsyncParallelBailHook extends Hook_1 {
+        compile(options) {
+            factory$5.setup(this, options)
+            return factory$5.create(options)
+        }
+    }
+
+    Object.defineProperties(AsyncParallelBailHook.prototype, {
+        _call: { value: undefined, configurable: true, writable: true }
+    })
+
+    var AsyncParallelBailHook_1 = AsyncParallelBailHook
+
+    class AsyncSeriesHookCodeFactory extends HookCodeFactory_1 {
+        content({ onError, onDone }) {
+            return this.callTapsSeries({
+                onError: (i, err, next, doneBreak) => onError(err) + doneBreak(true),
+                onDone
+            })
+        }
+    }
+
+    const factory$6 = new AsyncSeriesHookCodeFactory()
+
+    class AsyncSeriesHook extends Hook_1 {
+        compile(options) {
+            factory$6.setup(this, options)
+            return factory$6.create(options)
+        }
+    }
+
+    Object.defineProperties(AsyncSeriesHook.prototype, {
+        _call: { value: undefined, configurable: true, writable: true }
+    })
+
+    var AsyncSeriesHook_1 = AsyncSeriesHook
+
+    class AsyncSeriesBailHookCodeFactory extends HookCodeFactory_1 {
+        content({ onError, onResult, resultReturns, onDone }) {
+            return this.callTapsSeries({
+                onError: (i, err, next, doneBreak) => onError(err) + doneBreak(true),
+                onResult: (i, result, next) =>
+                    `if(${result} !== undefined) {\n${onResult(result)};\n} else {\n${next()}}\n`,
+                resultReturns,
+                onDone
+            })
+        }
+    }
+
+    const factory$7 = new AsyncSeriesBailHookCodeFactory()
+
+    class AsyncSeriesBailHook extends Hook_1 {
+        compile(options) {
+            factory$7.setup(this, options)
+            return factory$7.create(options)
+        }
+    }
+
+    Object.defineProperties(AsyncSeriesBailHook.prototype, {
+        _call: { value: undefined, configurable: true, writable: true }
+    })
+
+    var AsyncSeriesBailHook_1 = AsyncSeriesBailHook
+
+    class AsyncSeriesWaterfallHookCodeFactory extends HookCodeFactory_1 {
+        content({ onError, onResult, onDone }) {
+            return this.callTapsSeries({
+                onError: (i, err, next, doneBreak) => onError(err) + doneBreak(true),
+                onResult: (i, result, next) => {
+                    let code = ''
+                    code += `if(${result} !== undefined) {\n`
+                    code += `${this._args[0]} = ${result};\n`
+                    code += `}\n`
+                    code += next()
+                    return code
+                },
+                onDone: () => onResult(this._args[0])
+            })
+        }
+    }
+
+    const factory$8 = new AsyncSeriesWaterfallHookCodeFactory()
+
+    class AsyncSeriesWaterfallHook extends Hook_1 {
+        constructor(args) {
+            super(args)
+            if (args.length < 1) throw new Error('Waterfall hooks must have at least one argument')
+        }
+
+        compile(options) {
+            factory$8.setup(this, options)
+            return factory$8.create(options)
+        }
+    }
+
+    Object.defineProperties(AsyncSeriesWaterfallHook.prototype, {
+        _call: { value: undefined, configurable: true, writable: true }
+    })
+
+    var AsyncSeriesWaterfallHook_1 = AsyncSeriesWaterfallHook
+
+    /*
+    	MIT License http://www.opensource.org/licenses/mit-license.php
+    	Author Tobias Koppers @sokra
+    */
+
+    class HookMap {
+        constructor(factory) {
+            this._map = new Map()
+            this._factory = factory
+            this._interceptors = []
+        }
+
+        get(key) {
+            return this._map.get(key)
+        }
+
+        for(key) {
+            const hook = this.get(key)
+            if (hook !== undefined) {
+                return hook
+            }
+            let newHook = this._factory(key)
+            const interceptors = this._interceptors
+            for (let i = 0; i < interceptors.length; i++) {
+                newHook = interceptors[i].factory(key, newHook)
+            }
+            this._map.set(key, newHook)
+            return newHook
+        }
+
+        intercept(interceptor) {
+            this._interceptors.push(
+                Object.assign(
+                    {
+                        factory: (key, hook) => hook
+                    },
+                    interceptor
+                )
+            )
+        }
+
+        tap(key, options, fn) {
+            return this.for(key).tap(options, fn)
+        }
+
+        tapAsync(key, options, fn) {
+            return this.for(key).tapAsync(options, fn)
+        }
+
+        tapPromise(key, options, fn) {
+            return this.for(key).tapPromise(options, fn)
+        }
+    }
+
+    var HookMap_1 = HookMap
+
+    class MultiHook {
+        constructor(hooks) {
+            this.hooks = hooks
+        }
+
+        tap(options, fn) {
+            for (const hook of this.hooks) {
+                hook.tap(options, fn)
+            }
+        }
+
+        tapAsync(options, fn) {
+            for (const hook of this.hooks) {
+                hook.tapAsync(options, fn)
+            }
+        }
+
+        tapPromise(options, fn) {
+            for (const hook of this.hooks) {
+                hook.tapPromise(options, fn)
+            }
+        }
+
+        isUsed() {
+            for (const hook of this.hooks) {
+                if (hook.isUsed()) return true
+            }
+            return false
+        }
+
+        intercept(interceptor) {
+            for (const hook of this.hooks) {
+                hook.intercept(interceptor)
+            }
+        }
+
+        withOptions(options) {
+            return new MultiHook(this.hooks.map(h => h.withOptions(options)))
+        }
+    }
+
+    var MultiHook_1 = MultiHook
+
+    var lib = createCommonjsModule(function (module, exports) {
+        exports.__esModule = true
+        exports.Tapable = Tapable_1
+        exports.SyncHook = SyncHook_1
+        exports.SyncBailHook = SyncBailHook_1
+        exports.SyncWaterfallHook = SyncWaterfallHook_1
+        exports.SyncLoopHook = SyncLoopHook_1
+        exports.AsyncParallelHook = AsyncParallelHook_1
+        exports.AsyncParallelBailHook = AsyncParallelBailHook_1
+        exports.AsyncSeriesHook = AsyncSeriesHook_1
+        exports.AsyncSeriesBailHook = AsyncSeriesBailHook_1
+        exports.AsyncSeriesWaterfallHook = AsyncSeriesWaterfallHook_1
+        exports.HookMap = HookMap_1
+        exports.MultiHook = MultiHook_1
+    })
+
+    unwrapExports(lib)
+    var lib_1 = lib.Tapable
+    var lib_2 = lib.SyncHook
+    var lib_3 = lib.SyncBailHook
+    var lib_4 = lib.SyncWaterfallHook
+    var lib_5 = lib.SyncLoopHook
+    var lib_6 = lib.AsyncParallelHook
+    var lib_7 = lib.AsyncParallelBailHook
+    var lib_8 = lib.AsyncSeriesHook
+    var lib_9 = lib.AsyncSeriesBailHook
+    var lib_10 = lib.AsyncSeriesWaterfallHook
+    var lib_11 = lib.HookMap
+    var lib_12 = lib.MultiHook
+
+    const defaultPlugins = []
+    const HOOKS = {
+        beforeRun: new lib_2(),
+        run: new lib_2(),
+        emit: new lib_2(['data']),
+        end: new lib_2()
+    }
+    class Pluginable {
         constructor(options) {
-            this.reverseStore = new Set()
+            this.plugins = []
+            this.hooks = HOOKS
+            this.initPlugin(options)
+        }
+        initPlugin(options) {
+            const { plugins } = options || {}
+            this.plugins.push(...defaultPlugins, ...(plugins || []))
+            this.plugins.forEach(plugin => {
+                plugin.apply(this)
+            })
+        }
+        plugin(type, cb) {
+            const name = this.hooks[type].constructor.name
+            const method = /Async/.test(name) ? 'tapAsync' : 'tap'
+            this.hooks[type][method](type, cb)
+        }
+        use(plugin) {
+            this.plugins.push(plugin)
+            plugin.apply(this)
+        }
+    }
+
+    class Recorder extends Pluginable {
+        constructor(options) {
+            super(options)
+            this.destroyStore = new Set()
+            this.listenStore = new Set()
+            this.watchesReadyPromise = new Promise(resolve => (this.watcherResolve = resolve))
             const opts = { ...Recorder.defaultRecordOpts, ...options }
+            this.watchers = this.getWatchers(opts)
             if (opts && opts.uploadUrl) {
                 new Transmitter(opts.uploadUrl)
             }
-            this.record(opts)
-            this.listenVisibleChange(opts)
+            this.init(opts)
         }
-        unsubscribe() {
-            this.reverseStore.forEach(un => un())
+        async init(options) {
+            const db = await getDBOperator
+            this.db = db
+            this.hooks.beforeRun.call(this)
+            this.record(options)
+            this.hooks.run.call(this)
+            this.listenVisibleChange(options)
         }
-        getRecorders(options) {
-            const context = options.context || window
-            context.__RecordOptions__ = options
-            const recorders = [Snapshot, ...Object.values(watchers)]
+        onData(cb) {
+            this.onDataCallback = cb
+        }
+        async destroy() {
+            await this.cancelListen()
+            this.destroyStore.forEach(un => un())
+        }
+        async cancelListen() {
+            await this.watchesReadyPromise
+            this.listenStore.forEach(un => un())
+            nodeStore.reset()
+        }
+        getWatchers(options) {
+            const watchers$1 = [Snapshot, ...Object.values(watchers)]
             if (options && options.audio) {
-                recorders.push(RecordAudio)
+                watchers$1.push(RecordAudio)
             }
-            return recorders
+            return watchers$1
         }
         record(options) {
-            this.startRecord(options)
+            const opts = { ...Recorder.defaultRecordOpts, ...options }
+            this.startRecord((opts.context.G_RECORD_OPTIONS = opts))
         }
         async startRecord(options) {
-            const db = await getDBOperator
-            const allRecorders = this.getRecorders(options)
-            let iframeWatchers = allRecorders
-            if (!options || !options.context) {
+            let activeWatchers = this.watchers
+            if (options.context === window) {
                 if (!options.skip) {
-                    db.clear()
+                    this.db.clear()
                 }
             } else {
-                iframeWatchers = [
+                activeWatchers = [
                     Snapshot,
                     watchers.MouseWatcher,
                     watchers.DOMWatcher,
@@ -11256,36 +16997,45 @@ var TimeCat = (function (exports) {
                     watchers.ScrollWatcher
                 ]
             }
-            function onEmit(options) {
-                const { onData } = options
+            const onEmit = options => {
+                const { write } = options
                 return data => {
                     if (!data) {
                         return
                     }
-                    let ret
-                    if (onData) {
-                        ret = onData(data, db)
-                        if (!ret) {
-                            return
-                        }
+                    this.hooks.emit.call(data)
+                    this.onDataCallback && this.onDataCallback(data)
+                    if (write) {
+                        this.db.addRecord(data)
                     }
-                    db.addRecord(ret || data)
                 }
             }
             const emit = onEmit(options)
-            emit(getHeadData())
-            iframeWatchers.forEach(watcher => {
+            const headData = await getHeadData()
+            const relatedId = headData.relatedId
+            if (options.context) {
+                options.context.G_RECORD_RELATED_ID = relatedId
+            }
+            emit({
+                type: exports.RecordType.HEAD,
+                data: headData,
+                relatedId: relatedId,
+                time: getRadix64TimeStr()
+            })
+            activeWatchers.forEach(watcher => {
                 new watcher({
-                    context: (options && options.context) || window,
-                    reverseStore: this.reverseStore,
+                    context: options && options.context,
+                    listenStore: this.listenStore,
+                    relatedId: relatedId,
                     emit
                 })
             })
+            this.watcherResolve()
             await this.recordFrames()
         }
         async waitingFramesLoaded() {
             const frames = window.frames
-            const tasks = Array.from(frames)
+            const validFrames = Array.from(frames)
                 .filter(frame => {
                     try {
                         const frameElement = frame.frameElement
@@ -11303,10 +17053,10 @@ var TimeCat = (function (exports) {
                         })
                     })
                 })
-            if (!tasks.length) {
+            if (!validFrames.length) {
                 return Promise.resolve([])
             }
-            return Promise.all(tasks)
+            return Promise.all(validFrames)
         }
         async recordFrames() {
             const frames = await this.waitingFramesLoaded()
@@ -11316,21 +17066,29 @@ var TimeCat = (function (exports) {
             if (typeof document.hidden !== 'undefined') {
                 const hidden = 'hidden'
                 const visibilityChange = 'visibilitychange'
-                function handleVisibilityChange() {
+                async function handleVisibilityChange() {
                     if (document[hidden]) {
-                        this.unsubscribe()
+                        const data = {
+                            type: exports.RecordType.TERMINATE,
+                            data: null,
+                            relatedId: options.context.G_RECORD_RELATED_ID,
+                            time: getRadix64TimeStr()
+                        }
+                        this.db.addRecord(data)
+                        this.onDataCallback && this.onDataCallback(data)
+                        this.cancelListen()
+                        this.hooks.end.call()
                     } else {
                         this.record({ ...options, skip: true })
                     }
                 }
-                document.addEventListener(visibilityChange, handleVisibilityChange.bind(this), false)
-                this.reverseStore.add(() =>
-                    document.removeEventListener(visibilityChange, handleVisibilityChange.bind(this), false)
-                )
+                const handle = handleVisibilityChange.bind(this)
+                document.addEventListener(visibilityChange, handle, false)
+                this.destroyStore.add(() => document.removeEventListener(visibilityChange, handle, false))
             }
         }
     }
-    Recorder.defaultRecordOpts = { mode: 'default' }
+    Recorder.defaultRecordOpts = { mode: 'default', write: true, context: window }
 
     var HTML =
         '<div id="cat-container">\n    <div id="cat-player">\n        <iframe id="cat-sandbox" sandbox="allow-same-origin allow-scripts allow-popups"></iframe>\n    </div>\n    <div id="cat-panel">\n\n        <div class="cat-broadcaster">\n            <div class="float-layer" hidden>\n                <span class="subtitle"></span>\n            </div>\n        </div>\n\n        <div class="cat-keyboard">\n            <button class="play-or-pause" type="button" speed="1">▲</button>\n            <button type="button" class="speed" disabled speed="1">1x</button>\n            <button type="button" class="speed" speed="10">10x</button>\n            <button type="button" class="speed" speed="100">100x</button>\n        </div>\n        <div class="cat-timer">\n            <time>\n                00:00\n            </time>\n        </div>\n        <div class="cat-progress">\n            <div class="cat-slider-bar">\n                <div class="cat-current-progress">\n                    <div class="cat-thumb"></div>\n                </div>\n            </div>\n        </div>\n        <div class="cat-export">\n            <button type="button">\n                <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px"\n                    y="0px" width="16px" height="15px" viewBox="0 0 511.994 511.994"\n                    style="enable-background:new 0 0 511.994 511.994;" xml:space="preserve">\n                    <path style="fill:#fff;" d="M403.079,310.458c-3.627-7.232-11.008-11.797-19.093-11.797h-64v-85.333c0-11.776-9.536-21.333-21.333-21.333H213.32\n\t\t\tc-11.776,0-21.333,9.557-21.333,21.333v85.333h-64c-8.064,0-15.445,4.565-19.072,11.797c-3.605,7.232-2.837,15.872,2.027,22.336\n\t\t\tl128,170.667c4.011,5.376,10.347,8.533,17.045,8.533c6.72,0,13.056-3.157,17.067-8.533l128-170.667\n            C405.917,326.33,406.685,317.69,403.079,310.458z" />\n                    <path style="fill:#fff;" d="M298.663,128.001H213.33c-11.797,0-21.333,9.536-21.333,21.333c0,11.797,9.536,21.333,21.333,21.333h85.333\n                        c11.797,0,21.333-9.536,21.333-21.333C319.996,137.537,310.46,128.001,298.663,128.001z" />\n                    <path style="fill:#fff;" d="M298.663,64.001H213.33c-11.797,0-21.333,9.536-21.333,21.333s9.536,21.333,21.333,21.333h85.333\n                        c11.797,0,21.333-9.536,21.333-21.333S310.46,64.001,298.663,64.001z" />\n                </svg>\n\n            </button>\n        </div>\n    </div>\n    <div id="cat-start-page" style="display: none;">\n        <div class="play-btn">\n            <svg version="1.1" id="Capa_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"\n                x="0px" y="0px" viewBox="0 0 142.448 142.448" style="enable-background:new 0 0 142.448 142.448;"\n                xml:space="preserve">\n                <g>\n                    <path style="fill:#bbb;" d="M142.411,68.9C141.216,31.48,110.968,1.233,73.549,0.038c-20.361-0.646-39.41,7.104-53.488,21.639\n\t\tC6.527,35.65-0.584,54.071,0.038,73.549c1.194,37.419,31.442,67.667,68.861,68.861c0.779,0.025,1.551,0.037,2.325,0.037\n\t\tc19.454,0,37.624-7.698,51.163-21.676C135.921,106.799,143.033,88.377,142.411,68.9z M111.613,110.336\n\t\tc-10.688,11.035-25.032,17.112-40.389,17.112c-0.614,0-1.228-0.01-1.847-0.029c-29.532-0.943-53.404-24.815-54.348-54.348\n\t\tc-0.491-15.382,5.122-29.928,15.806-40.958c10.688-11.035,25.032-17.112,40.389-17.112c0.614,0,1.228,0.01,1.847,0.029\n\t\tc29.532,0.943,53.404,24.815,54.348,54.348C127.91,84.76,122.296,99.306,111.613,110.336z" />\n                    <path style="fill:#bbb;" d="M94.585,67.086L63.001,44.44c-3.369-2.416-8.059-0.008-8.059,4.138v45.293\n\t\tc0,4.146,4.69,6.554,8.059,4.138l31.583-22.647C97.418,73.331,97.418,69.118,94.585,67.086z" />\n                </g>\n            </svg>\n        </div>\n    </div>\n    <div id="cat-pointer">\n        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFoAAACACAQAAAAhBLbAAAAMkklEQVR42u2ceXAb5RXAfyvJh2xLcqw4dmQ7thPbOSGEOLJbjtIUBgi0wxSmMNNSoDTQMrRAIIUm8E+HuwfD0OkwPZgGUmiBNswUmvhIoBkIsS0DCTShSYAcxHYS27ItW7e0/UOr9a7sla3Tnqnfjjz77fft6uent+977+0BczInczInczInWRYBQf47a0RIqE+cadypoAXpI6KTgMXZgq2LiyyWFK4wEyIHPTp0s81MJkLrMEBx7WdtVzUAJozkYkA3m7EF9OSAYB4LiM6aYqCEQvJmN7YOPXkIwvxTvaJ4+COzBVhAEfnkzF5sAQNGcgTbqV5RFMXDn5hLgXJMsxdbQEcOheQL1af6RFEURfHTQ2YbAgsV2DMGrovTF0GX0JYu73rbXMkZishBj34mda0NLUgeRIZraHDsNlfJ2DOoa13cXkHdX1/vaLcs4ixF5Eh+ZEawp4KOwaqv69o989i6RHeoX9zVVlzDuZnEngp6EqD6JZ0tJTWytvXZx57KPCaV+iUdLdZaCVuffeyEzSMidYs7W621KgeYRfAEoN+lQ9FaXOtosy6O8dtZwk4A+gDNnFK0a2q62+cvmYnpJgFoG7CWHsWW6mpH+/y67E83Cdr0ORr5Uom9qLu9tI4zmLLpABM+EXu5BKeivajK0V7aQF82HWAS3uM4zTHYXa1lS2M8yWyDhiM0MaBoV1d1tpRHsHOzgZ2knz4ag72oqqvVtow+CrPht5OEhs+wq7ArK7tabcsl286w304aGj6nUYVtq3C02ZbThynT2ClAw3HW0q9oL7Q5dttW0Kuw7YxIStBwgkY1dnn3bttKFXYGwFOEhhOs45yiXV7W3VZxHr0UZg47ZWg4jp0zSuxyR2tlFDsj000aoOE4TfSpsLtaFp1Pb6amm7RAwwma6FVhd7ZUr6ZHZSRpA08TNJzErsIuK+9qrblAZdtpc4Bpg4YvaVRhly5wRLCL0o2dRmjoYa0K21rqaK9ZQw9F8imZFuy0QkNvTJpgtXa3166RTklDuqabNENDL40q7JKSfW/aooFrmhxg2qEj2MrsptzmaLXVpxM7A9DQi52TivbCqq7WijRiZwQaemnihKJtq+psrWpIV50kQ9DQh53jauyWRersJmlPkjFoOMs6FXZ5VVdL9bJ0YGcQGvpjsBdUOlqql9GXqt/OKDT006jCnl/haK1eoSo4JCEZhoaBWGybo616ZWp1koxDR7A/V2KXd7fVpISdBWgYwM5nira1zNFauyp57KxAwwBNHFVil3e1LF6likkSAM8SdAT7iAq7s6Xu/JhQaprYWYMGJ3b+G4Ndf0Ey5Z0sQsMwdpW255V17WpYLaUJCWg7q9AwwjoVtmVBZ0vDGnql+vY0/XaWoSPYSiOxlHa1NkSym2l7kqxDwwh2PlW0zdautoYLYzzJbIOOYB9SYpd0tSy9UJFLTnE/yYxAg4tmlZGYrZ0tyxvpoVBx7UYTfIagwcVlqgt8ZmvHrhWNKtvW9CQzBh1JE5TZjcna0bLKTg+mqRzgDEJPzG6KSjp2ntfEabl0qZsce0ahJ2Y3BSX7d53XLJ+SGrY9w9DQTy1tSuzijl3nNXMaE3laoZQhk0DzuZ1RgnHH5HCQ3Vyh2GK0dLTYr/pkPzZAIEgImMZdrgI6cjFhEVadOidK8g+RhJducToSFsMxW9zD538VgSrmUUBu7ISTYfO4Z1qjJpqt0dyxc/VXOCUVinXqUzLD0O/y1yT3zDd37FzTzJcUTLx1MU3QC5iv0fN40sfMM3/wzqVX0DPxtty0QFs5zcMafR/zvKIVCA6PESYkLWHVElIsQYIEyHvnxSY7ThlZAk+D97DSgYFbeJyzGrr+AbnSeo7h7pe2d9ZaQ34hRGjSu99FREJCEJ/gDYzUlrgMFEojhOjIlKEr2UcVUMxmNk864hS/YovcunXd9te/OEsQPwFChCdxZWFEQvjx4fnShQEjY+oBKZpHDR9SJa1volZj1NOKq7rfWHXLFZxDT5gQAfyTLAHJN+vJw4SAT/rX5H8vJeilOBQnoI6tGuOGeUrRevg6vZEBxhhhGCdOBlXLAIMM4mSYEUZx4yNISAIWU4a+kANYVVtuZ43G2GcVxZq6mnuv5CQB3LhwMRyzjEh/RxhlDA8+goTVZpQ09FreJ2/CVi1dB1S63nKzpRInIfx48eDGzZhicePGjQcPXvwECMinbGrQ63HIHkEp1/N1jT3+wEfyeknpz79DPzpEQgQJ4JvUtqPA4VibnlymiD3WxwYPofHgoU0zDrlBGVuMVl5COZUUY5SfolEvkZvOhcmivCQ0fQO7VW2X52vPvSMX6i7nOo39Xudted1YuOU23KonZ0RE1VQT3SaqTSMpTd8Yo2SPr+kxLrrl9+NbHJq6Vv1CwVVXMp9KisnHkFjdNAFNh4GbYwKgMW/jIx3vUb+ttVtOrtdym8YR9rBjvKHfupEQuXL2nYAkAH2CDbwYg2zf+p9uivFw5rG/jW/fqnkMZfh00/UXrcdJPoZEnwtLAPqWGC33j6y+/1A3ZgYZJG/Hzrf3R3uWcJ/GMRz8WdHaupEcDIk/E5YAtBWTonV2aO2mzw5ixomTIdw4H31pvHezaqxa12F5/eorr9lAP/lZqk/3Ou2bTx7FgpMhaRYr2tP299Zo/0Ie0NjzKM8qWg/fiQVBkZ1kDvrT3lU/PXEEE06GGMGFCxceAk+8MD7mfio19n4Sl7ze3Pz96+jHKD8PlqlS7+Ee+/2DpyjCKcUHkSl3DFP3vj+9Fh1VyM809j/LLxWth35MGSFypCkmM5o+cNL+gKuHIobkkMaPDx9ePBge3xb0R0f+hGUax/i14o6Q5SvuuokBjHK1NOUrARNmon1H19w32kchgxKyV4p/A/jxUvj5h79RnI5ars/NE4rWljsKa/FLdp0WTauw3zty8YPiEEacjOBiDC8BOasL4MdDwVMvj8h3hH+PJo3D/pbD8npF9aabccoxSHqvBLR+fPED4hB5kpbdeKUcIxI1RAJN4+DhJ7eN7/OI5tGU08yDd5Stwj39m2qn1rSk6ze7r7yX0QnIYTmyCBHEzxjFz7x6Ur6t5hqu0jjwduS5iMKSh27FRf50dT2VTUvIb+3/5j2EMDAg23IUOWJCYcJSZKz3nnhCoWvtKf0XivW7f7jYjkua0qd0fdrQ0o8u6OC1f117B2H0OHFJeZtfoWWkT8Su3cx7fscB+UrQxdyo8QU72SuvG/Ie2YhPCp+SvKEi+oytUVcnhvbuYSGruZg1NFCJlaJJHsUWENCTjwUbK6m86YHxGPTgpGHqInGb6FcFues2YKECM3lTXeHSa0ALkWm1oko/dPtDfiMFuKRpJJIdT6xXRGtAOgTMnxxZ31gtTYllnMGhGlrMs2xndcyXl1te2YFRSmOTEh0G8jHryvT5LGQZS1hEGfOkCwuT6UFAwEAeFhayjMrL7xzX4UkxR9Zwrvj4hMJuVL61ESOlFJEbP+rTa/YICAhiWMxHj09a/HINQpx0j+hHh+Xzo6uXLV8S6bDg4V0ANrGL9Ro8b+35S+vAgFRGn2aKFQsQ0XUhZoopxkyR5P7jWZuAnjzMlLGU6nXfHddhj2gWrxXPiVryxvv1G6mmgWUswCSV0eN8TRw9S5YdeWGGSAiRMPFSeQHQk0M+JiwMv/DMbd+OdIi4KNJwVTsP3P/y4b2EyWeYYUbxECAYT9dC3O1RnymCyr3FO1rkLQoFmAk3rDz8mi43znj+fWjTqx/sJUyBVG8aw42PgORONUQf54hK2OghprK0cR+iwzTwxbzS5gu0hnYdu+F3jz7f+wUmRCmWic4AU5QN4rtxde/0Tg1B1rUJYX7Nsdct5omDjpy+65Xd7fgw4WcMD268ePEpCsBxvi2eppOTqK4FdJjcJwxF62NCvb7Bjdt+9OwXBylEh0vKfNyylievWSeg6WSxIx7biAlDvvXYqxUV0a5R95Ydz73BGcyEGcONF49UyQvKwFPW7dKvabW/Lgie9uVuuBQgFHjynxuefr8dHfmMMoJLSta8Ch0zNXKmHr6LRCK5GCkil5xjbyyp++POza8MHcOMgTE8qkJuQK7eTfP9Q5mD1mEglwLM+K6+LGBpb8OKCQ9eCdhHQEoiEgLOJHT0VT15GLEwgoEKkDLJqDkEkgHOHHTkyDoJO488cqUSekACDsrF8iReSZXJuxBEwgSBMEG8CCBd1EwJOBvQkRk1KIUdkeuyKQFDZl+5EH3/23iqKsakaCkcOJMiKD7KEy6lF6tl/s0Fsd8wK94DNydzMif/n/I/5OjlEWH8JT8AAAAASUVORK5CYII="\n            alt="pointer">\n        <div class="spinner"></div>\n    </div>\n</div>\n<!--env-->\n<!-- Global site tag (gtag.js) - Google Analytics -->\n<script async src="https://www.googletagmanager.com/gtag/js?id=UA-151180797-1"></script>\n<script>\n    window.dataLayer = window.dataLayer || [];\n    function gtag() { dataLayer.push(arguments); }\n    gtag(\'js\', new Date());\n    gtag(\'config\', \'UA-151180797-1\');\n</script>\n<!--env-->\n'
@@ -11344,6 +17102,9 @@ var TimeCat = (function (exports) {
     function insertOrMoveNode(data, orderSet) {
         const { parentId, nextId, node } = data
         const parentNode = nodeStore.getNode(parentId)
+        const findNextNode = nextId => {
+            return nextId ? nodeStore.getNode(nextId) : null
+        }
         if (parentNode && isElementNode(parentNode)) {
             let nextNode = null
             if (nextId) {
@@ -11374,13 +17135,10 @@ var TimeCat = (function (exports) {
             return true
         }
     }
-    function findNextNode(nextId) {
-        return nextId ? nodeStore.getNode(nextId) : null
-    }
     async function updateDom(Record) {
         const { type, data } = Record
         switch (type) {
-            case RecordType.SNAPSHOT: {
+            case exports.RecordType.SNAPSHOT: {
                 const snapshotData = data
                 const { frameId } = snapshotData
                 if (frameId) {
@@ -11393,20 +17151,23 @@ var TimeCat = (function (exports) {
                 }
                 break
             }
-            case RecordType.SCROLL: {
+            case exports.RecordType.SCROLL: {
                 const { top, left, id } = data
                 const target = id ? nodeStore.getNode(id) : this.c.sandBoxDoc.documentElement
+                if (!target) {
+                    return
+                }
                 const curTop = target.scrollTop
                 const behavior =
-                    Math.abs(top - curTop) > window.__ReplayData__.snapshot.data.height * 3 ? 'auto' : 'smooth'
-                target.scrollTo({
+                    Math.abs(top - curTop) > window.G_REPLAY_DATA.snapshot.data.height * 3 ? 'auto' : 'smooth'
+                target.scroll({
                     top,
                     left,
                     behavior
                 })
                 break
             }
-            case RecordType.WINDOW: {
+            case exports.RecordType.WINDOW: {
                 const { width, height, id } = data
                 let target
                 if (id) {
@@ -11419,37 +17180,41 @@ var TimeCat = (function (exports) {
                 }
                 break
             }
-            case RecordType.MOUSE: {
+            case exports.RecordType.MOUSE: {
                 const { x, y, id, type } = data
                 let left = 0,
                     top = 0
                 if (id) {
                     const node = nodeStore.getNode(id)
-                    const { left: l, top: t } =
-                        (node === null || node === void 0 ? void 0 : node.getBoundingClientRect()) || {}
-                    left = l
-                    top = t
+                    let rect = {}
+                    if (node && node.getBoundingClientRect) {
+                        rect = node.getBoundingClientRect()
+                    }
+                    const { left: nodeLeft, top: nodeTop } = rect
+                    left = nodeLeft
+                    top = nodeTop
                 }
-                if (type === MouseEventType.MOVE) {
+                if (type === exports.MouseEventType.MOVE) {
                     this.pointer.move(x + left, y + top)
-                } else if (type === MouseEventType.CLICK) {
+                } else if (type === exports.MouseEventType.CLICK) {
                     this.pointer.click(x + left, y + top)
                 }
                 break
             }
-            case RecordType.DOM: {
-                await delay(200)
+            case exports.RecordType.DOM: {
+                await actionDelay()
                 const { addedNodes, movedNodes, removedNodes, attrs, texts } = data
-                removedNodes.forEach(data => {
-                    const { parentId, id } = data
-                    const parentNode = nodeStore.getNode(parentId)
-                    const node = nodeStore.getNode(id)
-                    if (node && parentNode && parentNode.contains(node)) {
-                        parentNode.removeChild(node)
-                    }
-                })
-                const movedList = movedNodes.slice()
+                removedNodes &&
+                    removedNodes.forEach(data => {
+                        const { parentId, id } = data
+                        const parentNode = nodeStore.getNode(parentId)
+                        const node = nodeStore.getNode(id)
+                        if (node && parentNode && parentNode.contains(node)) {
+                            parentNode.removeChild(node)
+                        }
+                    })
                 const orderSet = new Set()
+                const movedList = (movedNodes && movedNodes.slice()) || []
                 movedList.forEach(data => {
                     if (data.nextId) {
                         if (movedList.some(a => a.id === data.nextId)) {
@@ -11466,62 +17231,66 @@ var TimeCat = (function (exports) {
                             nextId
                         }
                     })
-                    .concat(addedNodes.slice())
-                const n = addedList.length
-                const maxRevertCount = n > 0 ? (n * n + n) / 2 : 0
-                let revertCount = 0
-                while (addedList.length) {
-                    const addData = addedList.shift()
-                    if (addData) {
-                        if (insertOrMoveNode(addData, orderSet)) {
-                            if (revertCount++ < maxRevertCount) {
-                                addedList.push(addData)
+                    .concat((addedNodes && addedNodes.slice()) || [])
+                if (addedList) {
+                    const n = addedList.length
+                    const maxRevertCount = n > 0 ? (n * n + n) / 2 : 0
+                    let revertCount = 0
+                    while (addedList.length) {
+                        const addData = addedList.shift()
+                        if (addData) {
+                            if (insertOrMoveNode(addData, orderSet)) {
+                                if (revertCount++ < maxRevertCount) {
+                                    addedList.push(addData)
+                                }
                             }
                         }
                     }
                 }
-                attrs.forEach(attr => {
-                    const { id, key, value } = attr
-                    const node = nodeStore.getNode(id)
-                    if (node) {
-                        setAttribute(node, key, value)
-                    }
-                })
-                texts.forEach(text => {
-                    const { id, value, parentId } = text
-                    const parentNode = nodeStore.getNode(parentId)
-                    const node = nodeStore.getNode(id)
-                    if (parentNode && node) {
-                        if (isExistingNode(node)) {
-                            node.textContent = value
-                            return
+                attrs &&
+                    attrs.forEach(attr => {
+                        const { id, key, value } = attr
+                        const node = nodeStore.getNode(id)
+                        if (node) {
+                            setAttribute(node, key, value)
                         }
-                        parentNode.innerText = value
-                    }
-                })
+                    })
+                texts &&
+                    texts.forEach(text => {
+                        const { id, value, parentId } = text
+                        const parentNode = nodeStore.getNode(parentId)
+                        const node = nodeStore.getNode(id)
+                        if (parentNode && node) {
+                            if (isExistingNode(node)) {
+                                node.textContent = value
+                                return
+                            }
+                            parentNode.innerText = value
+                        }
+                    })
                 break
             }
-            case RecordType.FORM_EL: {
-                await delay(200)
+            case exports.RecordType.FORM_EL: {
+                await actionDelay()
                 const { id, key, type: formType, value, patches } = data
                 const node = nodeStore.getNode(id)
-                const { mode } = window.__ReplayOptions__
+                const { mode } = window.G_REPLAY_OPTIONS
                 if (node) {
-                    if (formType === FormElementEvent.INPUT || formType === FormElementEvent.CHANGE) {
+                    if (formType === exports.FormElementEvent.INPUT || formType === exports.FormElementEvent.CHANGE) {
                         if (patches && patches.length) {
                             const newValue = revertStrByPatches(node.value, patches)
                             node.value = newValue
                         } else if (key) {
                             node[key] = value
                         }
-                    } else if (formType === FormElementEvent.FOCUS) {
+                    } else if (formType === exports.FormElementEvent.FOCUS) {
                         if (mode === 'live') {
                             return
                         }
-                        node.focus()
-                    } else if (formType === FormElementEvent.BLUR) {
-                        node.blur()
-                    } else if (formType === FormElementEvent.PROP) {
+                        node.focus && node.focus()
+                    } else if (formType === exports.FormElementEvent.BLUR) {
+                        node.blur && node.blur()
+                    } else if (formType === exports.FormElementEvent.PROP) {
                         if (key) {
                             node[key] = value
                         }
@@ -11529,16 +17298,17 @@ var TimeCat = (function (exports) {
                 }
                 break
             }
-            case RecordType.LOCATION: {
+            case exports.RecordType.LOCATION: {
                 const { path, hash, href, contextNodeId } = data
                 const contextNode = nodeStore.getNode(contextNodeId)
                 if (contextNode) {
                     const context = contextNode.ownerDocument.defaultView
-                    context.__ReplayLocation__ = { ...context.__ReplayLocation__, ...{ path, hash, href } }
+                    context.G_REPLAY_LOCATION = { ...context.G_REPLAY_LOCATION, ...{ path, hash, href } }
                 }
                 break
             }
-            case RecordType.CANVAS: {
+            case exports.RecordType.CANVAS: {
+                await actionDelay()
                 const { src, id, strokes } = data
                 const target = nodeStore.getNode(id)
                 if (!target) {
@@ -11571,8 +17341,7 @@ var TimeCat = (function (exports) {
                                     }
                                     ctx[name].apply(ctx, args)
                                 } else {
-                                    const value = args
-                                    ctx[name] = value
+                                    ctx[name] = args
                                 }
                             }
                         }
@@ -11594,7 +17363,7 @@ var TimeCat = (function (exports) {
     }
     function removeStartPage() {
         const startPage = document.querySelector('#cat-start-page')
-        startPage.parentElement.removeChild(startPage)
+        startPage?.parentElement?.removeChild(startPage)
     }
     async function waitStart() {
         const btn = showStartBtn()
@@ -11629,609 +17398,8 @@ var TimeCat = (function (exports) {
             contentDocument.replaceChild(content, documentElement)
         }
     }
-
-    class ContainerComponent {
-        constructor() {
-            this.init()
-        }
-        getSnapshotRecord() {
-            return window.__ReplayData__.snapshot.data
-        }
-        init() {
-            this.initTemplate()
-            this.initSandbox()
-            const { resize } = this.makeItResponsive(this.container)
-            this.resize = resize
-        }
-        initSandbox() {
-            this.sandBox = this.container.querySelector('#cat-sandbox')
-            this.sandBoxDoc = this.sandBox.contentDocument
-            createIframeDOM(this.sandBoxDoc, this.getSnapshotRecord())
-            disableScrolling(this.sandBox.contentWindow.document)
-            this.setViewState()
-        }
-        setViewState() {
-            nodeStore.reset()
-            injectIframeContent(this.sandBoxDoc, this.getSnapshotRecord())
-        }
-        initTemplate() {
-            document.head.append(this.createStyle('cat-css', CSS))
-            document.body.append(this.createContainer('cat-main', HTML))
-        }
-        createContainer(id, html) {
-            const parser = new DOMParser()
-            const el = parser.parseFromString(filteringTemplate(html), 'text/html').body.firstChild
-            el.id = id
-            el.style.width = this.getSnapshotRecord().width + 'px'
-            el.style.height = this.getSnapshotRecord().height + 'px'
-            el.style.display = 'none'
-            return (this.container = el)
-        }
-        makeItResponsive(target) {
-            const debounceResizeFn = debounce(resizeHandle, 500)
-            window.addEventListener('resize', debounceResizeFn.bind(this))
-            triggerResize()
-            setTimeout(() => (this.container.style.opacity = '1'))
-            this.container.style.display = 'block'
-            function triggerResize(setWidth, setHeight) {
-                resizeHandle({ target: window }, setWidth, setHeight)
-            }
-            function resizeHandle(e, setWidth, setHeight) {
-                if (e && e.target instanceof Window) {
-                    const { innerWidth: w, innerHeight: h } = e.target
-                    scalePages(target, w, h, setWidth, setHeight)
-                }
-            }
-            function scalePages(target, maxWidth, maxHeight, setWidth, setHeight) {
-                const { mode: replayMode } = window.__ReplayOptions__ || {}
-                const panelHeight = replayMode === 'live' ? 0 : 40 - 2
-                const { width: targetWidth, height: targetHeight } = getPageSize(target)
-                const scaleX = maxWidth / (setWidth || targetWidth)
-                const scaleY = maxHeight / ((setHeight || targetHeight) + panelHeight)
-                const scale = Math.min(scaleX > scaleY ? scaleY : scaleX, 1)
-                const left =
-                    ((setWidth || targetWidth) * scale - (setWidth || targetWidth)) / 2 +
-                    (maxWidth - (setWidth || targetWidth) * scale) / 2
-                const top = (maxHeight - (setHeight || targetHeight) - panelHeight * scale) / 2
-                target.style.transform = `scale(${scale})`
-                target.style.left = left + 'px'
-                target.style.top = top + 'px'
-                if (setWidth) {
-                    target.style.width = setWidth + 'px'
-                }
-                if (setHeight) {
-                    target.style.height = setHeight + 'px'
-                }
-            }
-            function getPageSize(target) {
-                return {
-                    width: parseInt(target.style.width, 10),
-                    height: parseInt(target.style.height, 10)
-                }
-            }
-            return {
-                resize: triggerResize
-            }
-        }
-        createStyle(id, s) {
-            const style = document.createElement('style')
-            style.id = id
-            style.innerHTML = s
-            return style
-        }
-    }
-
-    class KeyboardComponent {
-        constructor(container) {
-            this.c = container
-            this.init()
-        }
-        init() {
-            this.controller = this.c.container.querySelector('.cat-keyboard')
-            this.playOrPauseBtn = this.c.container.querySelector('.play-or-pause')
-            this.exportBtn = this.c.container.querySelector('.cat-export')
-            this.exportBtn.addEventListener('click', this.export)
-            this.controller.addEventListener('click', e => {
-                if (e.target && e.target.type === 'button') {
-                    const speed = Number(e.target.getAttribute('speed'))
-                    this.dispatchPlay(speed)
-                }
-            })
-            reduxStore.subscribe('player', state => {
-                if (state) {
-                    this.paly(state.speed)
-                    this.setSpeed(state.speed)
-                }
-            })
-            this.detectWindowIsActive()
-        }
-        dispatchPlay(speed = 0) {
-            reduxStore.dispatch({
-                type: PlayerTypes.SPEED,
-                data: {
-                    speed
-                }
-            })
-        }
-        detectWindowIsActive() {
-            document.addEventListener(
-                'visibilitychange',
-                () => {
-                    if (document.visibilityState === 'hidden') {
-                        this.dispatchPlay()
-                    }
-                },
-                false
-            )
-        }
-        paly(speed) {
-            if (speed !== 0) {
-                this.playOrPauseBtn.innerText = '〓'
-                this.playOrPauseBtn.setAttribute('style', 'letter-spacing: 1px;font-weight: bold;')
-                this.playOrPauseBtn.removeAttribute('speed')
-            } else {
-                this.playOrPauseBtn.innerText = '▲'
-                this.playOrPauseBtn.removeAttribute('style')
-                this.playOrPauseBtn.setAttribute('speed', '1')
-            }
-        }
-        setSpeed(speed) {
-            const speedNodes = this.c.container.querySelectorAll('.speed')
-            ;[...speedNodes].forEach(node => {
-                node.removeAttribute('disabled')
-            })
-            const index = getBtnIndex(speed)
-            function getBtnIndex(speed) {
-                switch (speed) {
-                    case 100:
-                        return 2
-                    case 10:
-                        return 1
-                    case 1:
-                        return 0
-                    default:
-                        return 0
-                }
-            }
-            if (index > -1) {
-                speedNodes[index].setAttribute('disabled', '')
-            }
-        }
-        async export() {
-            const SDKScript = document.getElementById('time-cat')
-            const initScript = document.getElementById('time-cat-init')
-            const scriptList = []
-            async function getScriptSource(scriptElement) {
-                return (
-                    scriptElement.textContent ||
-                    (await getRawScriptContent(scriptElement.src.trim())) ||
-                    scriptElement.src
-                )
-            }
-            if (SDKScript) {
-                const source = await getScriptSource(SDKScript)
-                scriptList.push({
-                    name: 'time-cat',
-                    src: source
-                })
-            }
-            if (initScript) {
-                const source = await getScriptSource(initScript)
-                scriptList.push({
-                    name: 'time-cat-init',
-                    src: source
-                })
-            }
-            const replayOptions = window.__ReplayOptions__
-            exportReplay({
-                ...replayOptions,
-                scripts: scriptList
-            })
-        }
-    }
-
-    class AnimationFrame {
-        constructor(animate, fps = 60) {
-            this.index = 0
-            this.fps = fps
-            this.animate = animate
-        }
-        start() {
-            let then = performance.now()
-            const interval = 1000 / this.fps
-            const tolerance = 0.1
-            const animateLoop = now => {
-                this.requestID = requestAnimationFrame(animateLoop)
-                const delta = now - then
-                if (delta >= interval - tolerance) {
-                    then = now - (delta % interval)
-                    this.animate(delta, this.index++)
-                }
-            }
-            this.requestID = requestAnimationFrame(animateLoop)
-        }
-        stop() {
-            cancelAnimationFrame(this.requestID)
-        }
-    }
-
-    class PlayerComponent {
-        constructor(c, pointer, progress, broadcaster) {
-            this.speed = 0
-            this.recordIndex = 0
-            this.frameIndex = 0
-            this.lastPercentage = 0
-            this.isFirstTimePlay = true
-            this.frameInterval = 250
-            this.elapsedTime = 0
-            this.audioOffset = 500
-            this.curViewDiffTime = 0
-            this.subtitlesIndex = 0
-            this.c = c
-            this.pointer = pointer
-            this.progress = progress
-            this.broadcaster = broadcaster
-            this.audioNode = new Audio()
-            this.initViewState()
-            if (!this.records.length) {
-                window.addEventListener('record-data', this.streamHandle.bind(this))
-            } else {
-                reduxStore.subscribe('player', state => {
-                    if (state) {
-                        this.progressState = reduxStore.getState('progress')
-                        const speed = state.speed
-                        this.speed = speed
-                        this.frames = this.getAccuratelyFrame()
-                        if (speed > 0) {
-                            this.play()
-                        } else {
-                            this.pause()
-                        }
-                        this.setProgress()
-                    }
-                })
-            }
-        }
-        initAudio() {
-            if (!this.audioData) {
-                return
-            }
-            if (this.audioData.src) {
-                this.audioBlobUrl = location.href.split('/').slice(0, -1).join('/') + '/' + this.audioData.src
-            } else {
-                const bufferStrList = this.audioData.bufferStrList
-                if (!bufferStrList.length) {
-                    return
-                }
-                const dataArray = []
-                for (let i = 0; i < bufferStrList.length; i++) {
-                    const data = base64ToFloat32Array(bufferStrList[i])
-                    dataArray.push(data)
-                }
-                const audioBlob = encodeWAV(dataArray, this.audioData.opts)
-                const audioBlobUrl = URL.createObjectURL(audioBlob)
-                this.audioBlobUrl = audioBlobUrl
-            }
-        }
-        streamHandle(e) {
-            const frame = e.detail
-            if (isSnapshot(frame)) {
-                window.__ReplayData__.snapshot = frame
-                this.c.setViewState()
-                return
-            }
-            this.execFrame(frame)
-        }
-        initViewState() {
-            const { __ReplayPacks__: packs } = window
-            const firstPack = packs[0]
-            const firstData = firstPack.body[0]
-            this.records = firstData.records
-            this.audioData = firstData.audio
-            this.initAudio()
-            if (!this.records.length) {
-                return
-            }
-            this.subtitlesIndex = 0
-            this.broadcaster.cleanText()
-            this.curViewEndTime = +this.records.slice(-1)[0].time
-            this.curViewDiffTime = 0
-            window.__ReplayData__ = firstData
-        }
-        async switchNextView(delayTime) {
-            const { __ReplayData__: rData, __ReplayPacks__: packs } = window
-            if (!this.records) {
-                return
-            }
-            const nextData = getNextData(rData)
-            if (!nextData) {
-                return
-            }
-            function getNextData(curData) {
-                var _a
-                for (let i = 0; i < packs.length; i++) {
-                    const body = packs[i].body
-                    const nextPackBody = (_a = packs[i + 1]) === null || _a === void 0 ? void 0 : _a.body
-                    for (let j = 0; j < body.length; j++) {
-                        if (curData === body[j]) {
-                            const next = body[j + 1]
-                            if (next) {
-                                return next
-                            } else if (nextPackBody.length) {
-                                return nextPackBody[0]
-                            }
-                            return null
-                        }
-                    }
-                }
-                return null
-            }
-            const curEndTime = +this.records.slice(-1)[0].time
-            const nextStartTime = +nextData.records[0].time
-            this.curViewDiffTime += nextStartTime - curEndTime
-            window.__ReplayData__ = nextData
-            this.records = nextData.records
-            this.audioData = nextData.audio
-            this.initAudio()
-            this.curViewEndTime = +this.records.slice(-1)[0].time
-            this.recordIndex = 0
-            if (delayTime) {
-                await delay(delayTime)
-            }
-            this.c.setViewState()
-        }
-        play() {
-            this.playAudio()
-            if (this.recordIndex === 0) {
-                this.progress.resetThumb()
-                if (!this.isFirstTimePlay) {
-                    this.initViewState()
-                    this.c.setViewState()
-                }
-                this.isFirstTimePlay = false
-            }
-            if (this.RAF && this.RAF.requestID) {
-                this.RAF.stop()
-            }
-            const maxFps = 30
-            this.RAF = new AnimationFrame(loop.bind(this), maxFps)
-            this.RAF.start()
-            const initTime = getTime()
-            this.startTime = 0
-            async function loop(t, loopIndex) {
-                const timeStamp = getTime() - initTime
-                if (this.frameIndex > 0 && !this.frames[this.frameIndex]) {
-                    this.stop()
-                    return
-                }
-                if (!this.startTime) {
-                    this.startTime = Number(this.frames[this.frameIndex])
-                }
-                const currTime = this.startTime + timeStamp * this.speed
-                let nextTime = Number(this.frames[this.frameIndex])
-                if (nextTime > this.curViewEndTime - this.curViewDiffTime) {
-                    await this.switchNextView(200)
-                }
-                while (nextTime && currTime >= nextTime) {
-                    this.renderEachFrame()
-                    this.frameIndex++
-                    nextTime = Number(this.frames[this.frameIndex])
-                }
-                this.elapsedTime = (currTime - this.frames[0]) / 1000
-                const frameCount = Math.floor(2 / (this.frameInterval / 1000))
-                const checkInterval = !(this.frameIndex % frameCount)
-                const shouldCheckAudioTime = this.audioNode.src && checkInterval && !((loopIndex % frameCount) * 2)
-                if (shouldCheckAudioTime) {
-                    const allowDiff = 200
-                    if (
-                        Math.abs((this.elapsedTime - this.audioNode.currentTime) * 1000) >
-                        this.audioOffset + allowDiff
-                    ) {
-                        this.syncAudioCurrentTime()
-                    }
-                }
-            }
-        }
-        playAudio() {
-            if (!this.audioData) {
-                return
-            }
-            if (!this.audioBlobUrl) {
-                this.pauseAudio()
-                return
-            }
-            if (this.audioNode) {
-                if (!this.audioNode.src || this.audioNode.src !== this.audioBlobUrl) {
-                    this.audioNode.src = this.audioBlobUrl
-                }
-                this.syncAudioCurrentTime()
-                if (this.speed > 1) {
-                    this.audioNode.pause()
-                } else {
-                    this.audioNode.play()
-                }
-            }
-        }
-        syncAudioCurrentTime(elapsedTime = this.elapsedTime, offset = this.audioOffset / 1000) {
-            this.audioNode.currentTime = elapsedTime + offset
-        }
-        pauseAudio() {
-            if (this.audioNode) {
-                this.audioNode.pause()
-            }
-        }
-        setProgress() {
-            this.progress.setProgressAnimation(this.frameIndex, this.frames.length, this.frameInterval, this.speed)
-        }
-        renderEachFrame() {
-            this.progress.updateTimer(((this.frameIndex + 1) * this.frameInterval) / 1000)
-            let data
-            while (
-                this.recordIndex < this.records.length &&
-                +(data = this.records[this.recordIndex]).time - this.curViewDiffTime <= this.frames[this.frameIndex]
-            ) {
-                this.execFrame.call(this, data)
-                this.recordIndex++
-            }
-            if (this.audioData && this.audioData.subtitles.length) {
-                const subtitles = this.audioData.subtitles
-                const { start, end, text } = subtitles[this.subtitlesIndex]
-                const audioStartTime = toTimeStamp(start)
-                const audioEndTime = toTimeStamp(end)
-                if (this.elapsedTime > audioEndTime / 1000) {
-                    this.broadcaster.cleanText()
-                    if (this.subtitlesIndex < subtitles.length - 1) {
-                        this.subtitlesIndex++
-                    }
-                } else if (this.elapsedTime > audioStartTime / 1000) {
-                    this.broadcaster.updateText(text)
-                }
-            }
-        }
-        pause() {
-            if (this.RAF) {
-                this.RAF.stop()
-            }
-            reduxStore.dispatch({
-                type: PlayerTypes.SPEED,
-                data: {
-                    speed: 0
-                }
-            })
-            this.pauseAudio()
-        }
-        stop() {
-            this.speed = 0
-            this.recordIndex = 0
-            this.frameIndex = 0
-            this.lastPercentage = 0
-            this.elapsedTime = 0
-            this.pause()
-            this.audioNode.currentTime = 0
-        }
-        execFrame(record) {
-            setTimeout(() => updateDom.call(this, record), 0)
-        }
-        getPercentInterval() {
-            const k = 0.08
-            const b = 0.2
-            return this.speed * k + b
-        }
-        getAccuratelyFrame(interval = this.frameInterval) {
-            this.progressState = reduxStore.getState()['progress']
-            const { startTime, endTime } = this.progressState
-            const s = +startTime
-            const e = +endTime
-            const result = []
-            for (let i = s; i < e; i += interval) {
-                result.push(i)
-            }
-            result.push(e)
-            return result
-        }
-    }
-
-    class PointerComponent {
-        constructor() {
-            this.x = 0
-            this.y = 0
-            this.initPointer()
-        }
-        initPointer() {
-            this.pointer = document.getElementById('cat-pointer')
-            this.move(0, 0)
-        }
-        move(x, y) {
-            this.x = x
-            this.y = y
-            this.pointer.style.left = this.x + 'px'
-            this.pointer.style.top = this.y + 'px'
-        }
-        async click(x, y) {
-            this.move(x, y)
-            if (this.pointer.hasAttribute('active')) {
-                return
-            }
-            await delay(100)
-            setAttribute(this.pointer, 'active', '')
-            await delay(400)
-            setAttribute(this.pointer, 'active', null)
-        }
-    }
-
-    class ProgressComponent {
-        constructor(c) {
-            this.progress = c.container.querySelector('.cat-progress')
-            this.timer = c.container.querySelector('.cat-timer time')
-            this.thumb = this.progress.querySelector('.cat-thumb')
-            this.currentProgress = this.progress.querySelector('.cat-current-progress')
-            this.slider = this.progress.querySelector('.cat-slider-bar')
-        }
-        async setProgressAnimation(index, total, interval, speed) {
-            if (!index && !speed) {
-                return
-            }
-            this.currentProgress.classList.remove('active')
-            await delay(20)
-            this.currentProgress.style.removeProperty('transition')
-            if (!speed) {
-                this.currentProgress.style.width = this.currentProgress.offsetWidth + 'px'
-                this.currentProgress.style.setProperty('transition', 'none')
-                return
-            }
-            const duration = ((total - index) * interval) / speed / 1000
-            this.currentProgress.style.transitionDuration = duration + 's'
-            this.currentProgress.classList.add('active')
-        }
-        updateTimer(second) {
-            const t = secondToDate(second)
-            if (t) {
-                this.timer.innerHTML = t
-            }
-        }
-        resetThumb() {
-            this.currentProgress.classList.remove('active')
-            const currentProgress = this.currentProgress.cloneNode(true)
-            this.currentProgress.parentNode.replaceChild(currentProgress, this.currentProgress)
-            currentProgress.style.width = '0'
-            this.currentProgress = currentProgress
-        }
-    }
-
-    class BroadcasterComponent {
-        constructor() {
-            this.init()
-        }
-        init() {
-            this.broadcaster = document.querySelector('.cat-broadcaster')
-            this.floatLayer = this.broadcaster.firstElementChild
-            this.subtitle = this.floatLayer.firstElementChild
-        }
-        updateText(text) {
-            text = text.trim()
-            if (this.subtitle.innerText.trim() === text) {
-                return
-            }
-            this.subtitle.innerText = text
-            this.floatLayer.toggleAttribute('hidden', !text)
-        }
-        cleanText() {
-            this.updateText('')
-        }
-    }
-
-    class Panel {
-        constructor(container) {
-            this.container = container
-            this.initComponent()
-        }
-        initComponent() {
-            this.keyboard = new KeyboardComponent(this.container)
-            this.progress = new ProgressComponent(this.container)
-            this.pointer = new PointerComponent()
-            this.broadcaster = new BroadcasterComponent()
-            this.player = new PlayerComponent(this.container, this.pointer, this.progress, this.broadcaster)
-        }
+    async function actionDelay() {
+        return delay(200)
     }
 
     var smoothscroll = createCommonjsModule(function (module, exports) {
@@ -12660,23 +17828,680 @@ var TimeCat = (function (exports) {
     })
     var smoothscroll_1 = smoothscroll.polyfill
 
-    const defaultReplayOptions = { autoplay: true, mode: 'default' }
+    class ContainerComponent {
+        constructor(options) {
+            this.options = options
+            this.init()
+        }
+        init() {
+            const target = this.options.target
+            const targetElement = typeof target === 'string' ? document.querySelector(target) : target
+            this.target = targetElement
+            this.initTemplate()
+            this.initSandbox()
+            const { resize } = this.makeItResponsive()
+            this.resize = resize
+        }
+        initSandbox() {
+            this.sandBox = this.container.querySelector('#cat-sandbox')
+            this.sandBoxDoc = this.sandBox.contentDocument
+            this.setSmoothScroll(this.sandBox.contentWindow)
+            createIframeDOM(this.sandBoxDoc, this.getSnapshotRecord())
+            disableScrolling(this.sandBox.contentWindow.document)
+            this.setViewState()
+        }
+        getSnapshotRecord() {
+            return window.G_REPLAY_DATA.snapshot.data
+        }
+        setSmoothScroll(context) {
+            smoothscroll.polyfill()
+            context.HTMLElement.prototype.scroll = window.scroll
+            context.HTMLElement.prototype.scrollTo = window.scrollTo
+        }
+        setViewState() {
+            nodeStore.reset()
+            injectIframeContent(this.sandBoxDoc, this.getSnapshotRecord())
+        }
+        initTemplate() {
+            const targetElement = this.target instanceof Window ? this.target.document.body : this.target
+            targetElement.append(this.createStyle('cat-css', CSS))
+            targetElement.append(this.createContainer('cat-main', HTML))
+        }
+        createContainer(id, html) {
+            const parser = new DOMParser()
+            const el = parser.parseFromString(filteringTemplate(html), 'text/html').body.firstChild
+            el.id = id
+            el.style.width = this.getSnapshotRecord().width + 'px'
+            el.style.height = this.getSnapshotRecord().height + 'px'
+            el.style.display = 'none'
+            return (this.container = el)
+        }
+        makeItResponsive() {
+            const self = this
+            const debounceResizeFn = debounce(resizeHandle, 500)
+            window.addEventListener('resize', debounceResizeFn.call(this, { target: self.target }), true)
+            this.options.destroyStore.add(() => {
+                window.removeEventListener('resize', debounceResizeFn.bind(this), true)
+            })
+            triggerResize()
+            setTimeout(() => (this.container.style.opacity = '1'))
+            this.container.style.display = 'block'
+            function triggerResize(setWidth, setHeight) {
+                resizeHandle({ target: self.target }, setWidth, setHeight)
+            }
+            function resizeHandle(e, setWidth, setHeight) {
+                if (!e) {
+                    return
+                }
+                if (e.target instanceof Window) {
+                    const { innerWidth: w, innerHeight: h } = e.target
+                    scalePages(self.container, w, h, setWidth, setHeight)
+                } else {
+                    const { offsetWidth: w, offsetHeight: h } = e.target
+                    scalePages(self.container, w, h, setWidth, setHeight)
+                }
+            }
+            function scalePages(target, maxWidth, maxHeight, setWidth, setHeight) {
+                const { mode: replayMode } = window.G_REPLAY_OPTIONS || {}
+                const panelHeight = replayMode === 'live' ? 0 : 40 - 2
+                const { width: targetWidth, height: targetHeight } = getPageSize(target)
+                const scaleX = maxWidth / (setWidth || targetWidth)
+                const scaleY = maxHeight / ((setHeight || targetHeight) + panelHeight)
+                const scale = Math.min(scaleX > scaleY ? scaleY : scaleX, 1)
+                const left =
+                    ((setWidth || targetWidth) * scale - (setWidth || targetWidth)) / 2 +
+                    (maxWidth - (setWidth || targetWidth) * scale) / 2
+                const top = (maxHeight - (setHeight || targetHeight) - panelHeight * scale) / 2
+                target.style.transform = `scale(${scale})`
+                target.style.left = left + 'px'
+                target.style.top = top + 'px'
+                if (setWidth) {
+                    target.style.width = setWidth + 'px'
+                }
+                if (setHeight) {
+                    target.style.height = setHeight + 'px'
+                }
+            }
+            function getPageSize(target) {
+                return {
+                    width: parseInt(target.style.width, 10),
+                    height: parseInt(target.style.height, 10)
+                }
+            }
+            return {
+                resize: triggerResize
+            }
+        }
+        createStyle(id, s) {
+            const style = document.createElement('style')
+            style.id = id
+            style.innerHTML = s
+            return style
+        }
+    }
+
+    class KeyboardComponent {
+        constructor(container) {
+            this.c = container
+            this.init()
+        }
+        init() {
+            this.controller = this.c.container.querySelector('.cat-keyboard')
+            this.playOrPauseBtn = this.c.container.querySelector('.play-or-pause')
+            this.exportBtn = this.c.container.querySelector('.cat-export')
+            this.exportBtn.addEventListener('click', this.export)
+            this.controller.addEventListener('click', e => {
+                if (e.target && e.target.type === 'button') {
+                    const speed = Number(e.target.getAttribute('speed'))
+                    this.dispatchPlay(speed)
+                }
+            })
+            reduxStore.subscribe('player', state => {
+                if (state) {
+                    this.paly(state.speed)
+                    this.setSpeed(state.speed)
+                }
+            })
+            this.detectWindowIsActive()
+        }
+        dispatchPlay(speed = 0) {
+            reduxStore.dispatch({
+                type: PlayerTypes.SPEED,
+                data: {
+                    speed
+                }
+            })
+        }
+        detectWindowIsActive() {
+            document.addEventListener(
+                'visibilitychange',
+                () => {
+                    if (document.visibilityState === 'hidden') {
+                        this.dispatchPlay()
+                    }
+                },
+                false
+            )
+        }
+        paly(speed) {
+            if (speed !== 0) {
+                this.playOrPauseBtn.innerText = '〓'
+                this.playOrPauseBtn.setAttribute('style', 'letter-spacing: 1px;font-weight: bold;')
+                this.playOrPauseBtn.removeAttribute('speed')
+            } else {
+                this.playOrPauseBtn.innerText = '▲'
+                this.playOrPauseBtn.removeAttribute('style')
+                this.playOrPauseBtn.setAttribute('speed', '1')
+            }
+        }
+        setSpeed(speed) {
+            const speedNodes = this.c.container.querySelectorAll('.speed')
+            ;[...speedNodes].forEach(node => {
+                node.removeAttribute('disabled')
+            })
+            const index = getBtnIndex(speed)
+            function getBtnIndex(speed) {
+                switch (speed) {
+                    case 100:
+                        return 2
+                    case 10:
+                        return 1
+                    case 1:
+                        return 0
+                    default:
+                        return 0
+                }
+            }
+            if (index > -1) {
+                speedNodes[index].setAttribute('disabled', '')
+            }
+        }
+        async export() {
+            const SDKScript = document.getElementById('timecat')
+            const initScript = document.getElementById('timecat-init')
+            const scriptList = []
+            const scripts = document.querySelectorAll('script')
+            function detectSDKSrc() {
+                return Array.from(scripts)
+                    .map(script => script.src)
+                    .find(src => /(timecat)(\.prod)?\.global\.js/.test(src))
+            }
+            function detectSDKContent() {
+                return Array.from(scripts)
+                    .map(script => script.textContent)
+                    .find(content => content?.trim().startsWith('var TimeCat'))
+            }
+            function detectInitScriptContent() {
+                return Array.from(scripts)
+                    .map(script => script.textContent)
+                    .find(content => {
+                        if (content) {
+                            return /new\s(TimeCat\.)?Player/.test(content)
+                        }
+                    })
+            }
+            async function getScriptSource(scriptElement) {
+                if (!scriptElement) {
+                    return
+                }
+                return (
+                    scriptElement.textContent ||
+                    (await getRawScriptContent(scriptElement.src.trim())) ||
+                    scriptElement.src
+                )
+            }
+            const SDKSource = (await getScriptSource(SDKScript)) || detectSDKSrc() || detectSDKContent()
+            scriptList.push({
+                name: 'timecat',
+                src: SDKSource
+            })
+            const source = (await getScriptSource(initScript)) || detectInitScriptContent()
+            scriptList.push({
+                name: 'timecat-init',
+                src: source
+            })
+            const replayOptions = window.G_REPLAY_OPTIONS
+            exportReplay({
+                ...replayOptions,
+                scripts: scriptList
+            })
+        }
+    }
+
+    class AnimationFrame {
+        constructor(animate, fps = 60) {
+            this.index = 0
+            this.fps = fps
+            this.animate = animate
+        }
+        start() {
+            let then = performance.now()
+            const interval = 1000 / this.fps
+            const tolerance = 0.1
+            const animateLoop = now => {
+                this.requestID = requestAnimationFrame(animateLoop)
+                const delta = now - then
+                if (delta >= interval - tolerance) {
+                    then = now - (delta % interval)
+                    this.animate(delta, this.index++)
+                }
+            }
+            this.requestID = requestAnimationFrame(animateLoop)
+        }
+        stop() {
+            cancelAnimationFrame(this.requestID)
+        }
+    }
+
+    class PlayerComponent {
+        constructor(options, c, pointer, progress, broadcaster) {
+            this.speed = 0
+            this.recordIndex = 0
+            this.frameIndex = 0
+            this.lastPercentage = 0
+            this.isFirstTimePlay = true
+            this.frameInterval = 250
+            this.elapsedTime = 0
+            this.audioOffset = 500
+            this.curViewDiffTime = 0
+            this.subtitlesIndex = 0
+            this.options = options
+            this.c = c
+            this.pointer = pointer
+            this.progress = progress
+            this.broadcaster = broadcaster
+            this.audioNode = new Audio()
+            this.initViewState()
+            if (!this.records.length) {
+                window.addEventListener('record-data', this.streamHandle.bind(this))
+                this.options.destroyStore.add(() =>
+                    window.removeEventListener('record-data', this.streamHandle.bind(this))
+                )
+            } else {
+                reduxStore.subscribe('player', state => {
+                    if (state) {
+                        this.progressState = reduxStore.getState('progress')
+                        const speed = state.speed
+                        this.speed = speed
+                        this.frames = this.getAccuratelyFrame()
+                        if (speed > 0) {
+                            this.play()
+                        } else {
+                            this.pause()
+                        }
+                        this.setProgress()
+                    }
+                })
+            }
+        }
+        initAudio() {
+            if (!this.audioData) {
+                return
+            }
+            if (this.audioData.src) {
+                this.audioBlobUrl = location.href.split('/').slice(0, -1).join('/') + '/' + this.audioData.src
+            } else {
+                const bufferStrList = this.audioData.bufferStrList
+                if (!bufferStrList.length) {
+                    return
+                }
+                const dataArray = []
+                for (let i = 0; i < bufferStrList.length; i++) {
+                    const data = base64ToFloat32Array(bufferStrList[i])
+                    dataArray.push(data)
+                }
+                const audioBlob = encodeWAV(dataArray, this.audioData.opts)
+                const audioBlobUrl = URL.createObjectURL(audioBlob)
+                this.audioBlobUrl = audioBlobUrl
+            }
+        }
+        streamHandle(e) {
+            const frame = e.detail
+            if (isSnapshot(frame)) {
+                window.G_REPLAY_DATA.snapshot = frame
+                this.c.setViewState()
+                return
+            }
+            this.execFrame(frame)
+        }
+        initViewState() {
+            const { G_REPLAY_PACKS: packs } = window
+            const firstPack = packs[0]
+            const firstData = firstPack.body[0]
+            this.records = firstData.records
+            this.audioData = firstData.audio
+            this.initAudio()
+            if (!this.records.length) {
+                return
+            }
+            this.subtitlesIndex = 0
+            this.broadcaster.cleanText()
+            this.curViewEndTime = +this.records.slice(-1)[0].time
+            this.curViewDiffTime = 0
+            window.G_REPLAY_DATA = firstData
+        }
+        async switchNextView(delayTime) {
+            const { G_REPLAY_DATA: rData, G_REPLAY_PACKS: packs } = window
+            if (!this.records) {
+                return
+            }
+            const nextData = getNextData(rData)
+            if (!nextData) {
+                return
+            }
+            function getNextData(curData) {
+                for (let i = 0; i < packs.length; i++) {
+                    const body = packs[i].body
+                    const nextPackBody = packs[i + 1]?.body
+                    for (let j = 0; j < body.length; j++) {
+                        if (curData === body[j]) {
+                            const next = body[j + 1]
+                            if (next) {
+                                return next
+                            } else if (nextPackBody.length) {
+                                return nextPackBody[0]
+                            }
+                            return null
+                        }
+                    }
+                }
+                return null
+            }
+            const curEndTime = +this.records.slice(-1)[0].time
+            const nextStartTime = +nextData.records[0].time
+            this.curViewDiffTime += nextStartTime - curEndTime
+            window.G_REPLAY_DATA = nextData
+            this.records = nextData.records
+            this.audioData = nextData.audio
+            this.initAudio()
+            this.curViewEndTime = +this.records.slice(-1)[0].time
+            this.recordIndex = 0
+            if (delayTime) {
+                await delay(delayTime)
+            }
+            this.c.setViewState()
+        }
+        play() {
+            this.playAudio()
+            if (this.recordIndex === 0) {
+                this.progress.resetThumb()
+                if (!this.isFirstTimePlay) {
+                    this.initViewState()
+                    this.c.setViewState()
+                }
+                this.isFirstTimePlay = false
+            }
+            if (this.RAF && this.RAF.requestID) {
+                this.RAF.stop()
+            }
+            const maxFps = 30
+            this.RAF = new AnimationFrame(loop.bind(this), maxFps)
+            this.options.destroyStore.add(() => this.RAF.stop())
+            this.RAF.start()
+            const initTime = getTime()
+            this.startTime = 0
+            async function loop(t, loopIndex) {
+                const timeStamp = getTime() - initTime
+                if (this.frameIndex > 0 && !this.frames[this.frameIndex]) {
+                    this.stop()
+                    return
+                }
+                if (!this.startTime) {
+                    this.startTime = Number(this.frames[this.frameIndex])
+                }
+                const currTime = this.startTime + timeStamp * this.speed
+                let nextTime = Number(this.frames[this.frameIndex])
+                if (nextTime > this.curViewEndTime - this.curViewDiffTime) {
+                    await this.switchNextView(300)
+                }
+                while (nextTime && currTime >= nextTime) {
+                    this.renderEachFrame()
+                    this.frameIndex++
+                    nextTime = Number(this.frames[this.frameIndex])
+                }
+                this.elapsedTime = (currTime - this.frames[0]) / 1000
+                const frameCount = Math.floor(2 / (this.frameInterval / 1000))
+                const checkInterval = !(this.frameIndex % frameCount)
+                const shouldCheckAudioTime = this.audioNode.src && checkInterval && !((loopIndex % frameCount) * 2)
+                if (shouldCheckAudioTime) {
+                    const allowDiff = 200
+                    if (
+                        Math.abs((this.elapsedTime - this.audioNode.currentTime) * 1000) >
+                        this.audioOffset + allowDiff
+                    ) {
+                        this.syncAudioCurrentTime()
+                    }
+                }
+            }
+        }
+        playAudio() {
+            if (!this.audioData) {
+                return
+            }
+            if (!this.audioBlobUrl) {
+                this.pauseAudio()
+                return
+            }
+            if (this.audioNode) {
+                if (!this.audioNode.src || this.audioNode.src !== this.audioBlobUrl) {
+                    this.audioNode.src = this.audioBlobUrl
+                }
+                this.syncAudioCurrentTime()
+                if (this.speed > 1) {
+                    this.audioNode.pause()
+                } else {
+                    this.audioNode.play()
+                }
+            }
+        }
+        syncAudioCurrentTime(elapsedTime = this.elapsedTime, offset = this.audioOffset / 1000) {
+            this.audioNode.currentTime = elapsedTime + offset
+        }
+        pauseAudio() {
+            if (this.audioNode) {
+                this.audioNode.pause()
+            }
+        }
+        setProgress() {
+            this.progress.setProgressAnimation(this.frameIndex, this.frames.length, this.frameInterval, this.speed)
+        }
+        renderEachFrame() {
+            this.progress.updateTimer(((this.frameIndex + 1) * this.frameInterval) / 1000)
+            let data
+            while (
+                this.recordIndex < this.records.length &&
+                +(data = this.records[this.recordIndex]).time - this.curViewDiffTime <= this.frames[this.frameIndex]
+            ) {
+                this.execFrame.call(this, data)
+                this.recordIndex++
+            }
+            if (this.audioData && this.audioData.subtitles.length) {
+                const subtitles = this.audioData.subtitles
+                const { start, end, text } = subtitles[this.subtitlesIndex]
+                const audioStartTime = toTimeStamp(start)
+                const audioEndTime = toTimeStamp(end)
+                if (this.elapsedTime > audioEndTime / 1000) {
+                    this.broadcaster.cleanText()
+                    if (this.subtitlesIndex < subtitles.length - 1) {
+                        this.subtitlesIndex++
+                    }
+                } else if (this.elapsedTime > audioStartTime / 1000) {
+                    this.broadcaster.updateText(text)
+                }
+            }
+        }
+        pause() {
+            if (this.RAF) {
+                this.RAF.stop()
+            }
+            reduxStore.dispatch({
+                type: PlayerTypes.SPEED,
+                data: {
+                    speed: 0
+                }
+            })
+            this.pauseAudio()
+        }
+        stop() {
+            this.speed = 0
+            this.recordIndex = 0
+            this.frameIndex = 0
+            this.lastPercentage = 0
+            this.elapsedTime = 0
+            this.pause()
+            this.audioNode.currentTime = 0
+        }
+        async execFrame(record) {
+            updateDom.call(this, record)
+        }
+        getPercentInterval() {
+            const k = 0.08
+            const b = 0.2
+            return this.speed * k + b
+        }
+        getAccuratelyFrame(interval = this.frameInterval) {
+            this.progressState = reduxStore.getState()['progress']
+            const { startTime, endTime } = this.progressState
+            const s = +startTime
+            const e = +endTime
+            const result = []
+            for (let i = s; i < e; i += interval) {
+                result.push(i)
+            }
+            result.push(e)
+            return result
+        }
+    }
+
+    class PointerComponent {
+        constructor() {
+            this.x = 0
+            this.y = 0
+            this.initPointer()
+        }
+        initPointer() {
+            this.pointer = document.getElementById('cat-pointer')
+            this.move(0, 0)
+        }
+        move(x, y) {
+            this.x = x
+            this.y = y
+            this.pointer.style.left = this.x + 'px'
+            this.pointer.style.top = this.y + 'px'
+        }
+        async click(x, y) {
+            this.move(x, y)
+            if (this.pointer.hasAttribute('active')) {
+                return
+            }
+            await delay(200)
+            setAttribute(this.pointer, 'active', '')
+            await delay(400)
+            setAttribute(this.pointer, 'active', null)
+        }
+    }
+
+    class ProgressComponent {
+        constructor(c) {
+            this.progress = c.container.querySelector('.cat-progress')
+            this.timer = c.container.querySelector('.cat-timer time')
+            this.thumb = this.progress.querySelector('.cat-thumb')
+            this.currentProgress = this.progress.querySelector('.cat-current-progress')
+            this.slider = this.progress.querySelector('.cat-slider-bar')
+        }
+        async setProgressAnimation(index, total, interval, speed) {
+            if (!index && !speed) {
+                return
+            }
+            this.currentProgress.classList.remove('active')
+            await delay(20)
+            this.currentProgress.style.removeProperty('transition')
+            if (!speed) {
+                this.currentProgress.style.width = this.currentProgress.offsetWidth + 'px'
+                this.currentProgress.style.setProperty('transition', 'none')
+                return
+            }
+            const duration = ((total - index) * interval) / speed / 1000
+            this.currentProgress.style.transitionDuration = duration + 's'
+            this.currentProgress.classList.add('active')
+        }
+        updateTimer(second) {
+            const t = secondToDate(second)
+            if (t) {
+                this.timer.innerHTML = t
+            }
+        }
+        resetThumb() {
+            this.currentProgress.classList.remove('active')
+            const currentProgress = this.currentProgress.cloneNode(true)
+            this.currentProgress.parentNode.replaceChild(currentProgress, this.currentProgress)
+            currentProgress.style.width = '0'
+            this.currentProgress = currentProgress
+        }
+    }
+
+    class BroadcasterComponent {
+        constructor() {
+            this.init()
+        }
+        init() {
+            this.broadcaster = document.querySelector('.cat-broadcaster')
+            this.floatLayer = this.broadcaster.firstElementChild
+            this.subtitle = this.floatLayer.firstElementChild
+        }
+        updateText(text) {
+            text = text.trim()
+            if (this.subtitle.innerText.trim() === text) {
+                return
+            }
+            this.subtitle.innerText = text
+            this.floatLayer.toggleAttribute('hidden', !text)
+        }
+        cleanText() {
+            this.updateText('')
+        }
+    }
+
+    class Panel {
+        constructor(container, options) {
+            this.container = container
+            this.options = options
+            this.initComponent()
+        }
+        initComponent() {
+            this.keyboard = new KeyboardComponent(this.container)
+            this.progress = new ProgressComponent(this.container)
+            this.pointer = new PointerComponent()
+            this.broadcaster = new BroadcasterComponent()
+            this.player = new PlayerComponent(
+                this.options,
+                this.container,
+                this.pointer,
+                this.progress,
+                this.broadcaster
+            )
+        }
+    }
+
+    const defaultReplayOptions = { autoplay: true, mode: 'default', target: window }
     class Player {
         constructor(options) {
+            this.destroyStore = new Set()
+            nodeStore.reset()
             this.init(options)
         }
         async init(options) {
-            const opts = { ...defaultReplayOptions, ...options }
-            window.__ReplayOptions__ = opts
-            smoothscroll.polyfill()
+            const opts = { destroyStore: this.destroyStore, ...defaultReplayOptions, ...options }
+            window.G_REPLAY_OPTIONS = opts
+            this.destroyStore.add(() => reduxStore.unsubscribe())
             const replayPacks = await this.getReplayData(opts)
-            if (!replayPacks) {
+            if (!replayPacks || !replayPacks.length) {
                 return
             }
-            const { records, audio } = (window.__ReplayData__ = this.getFirstReplayData(replayPacks))
+            const { records, audio } = (window.G_REPLAY_DATA = this.getFirstReplayData(replayPacks))
             const hasAudio = audio && (audio.src || audio.bufferStrList.length)
-            const c = new ContainerComponent()
-            new Panel(c)
+            const c = new ContainerComponent(opts)
+            new Panel(c, opts)
             showStartMask()
             this.fmp = new FMP()
             this.fmp.ready(async () => {
@@ -12686,7 +18511,7 @@ var TimeCat = (function (exports) {
                 removeStartPage()
                 if (records.length) {
                     const firstRecord = records[0]
-                    const replayPacks = window.__ReplayPacks__
+                    const replayPacks = window.G_REPLAY_PACKS
                     const startTime = firstRecord.time
                     const endTime =
                         replayPacks.reduce((packAcc, pack) => {
@@ -12728,7 +18553,7 @@ var TimeCat = (function (exports) {
             return replayPacks[0].body[0]
         }
         getGZipData() {
-            const data = window.__ReplayStrPacks__
+            const data = window.G_REPLAY_STR_PACKS
             if (!data) {
                 return null
             }
@@ -12748,9 +18573,6 @@ var TimeCat = (function (exports) {
             event = new CustomEvent(type, { detail: data })
             window.dispatchEvent(event)
         }
-        async fetchData(input, init) {
-            return fetch(input, init).then(res => res.json())
-        }
         async dataReceiver(receiver) {
             let replayPack
             let head
@@ -12764,7 +18586,7 @@ var TimeCat = (function (exports) {
                         if (!data) {
                             return
                         }
-                        if (data.type === RecordType.HEAD) {
+                        if (data.type === exports.RecordType.HEAD) {
                             head = data.data
                         } else if (data && isSnapshot(data)) {
                             if (head && body) {
@@ -12798,20 +18620,20 @@ var TimeCat = (function (exports) {
             return null
         }
         async getReplayData(options) {
-            const { receiver, replayPacks: data, fetch } = options
+            const { receiver, packs, records } = options
             const rawReplayPacks =
-                data ||
-                (fetch && (await this.fetchData(fetch.url, fetch.options))) ||
+                (records && classifyRecords(records)) ||
+                packs ||
                 (receiver && (await this.dataReceiver(receiver))) ||
                 this.getGZipData() ||
                 (await this.getDataFromDB()) ||
-                window.__ReplayPacks__
+                window.G_REPLAY_PACKS
             if (!rawReplayPacks) {
                 throw logError('Replay data not found')
             }
             const replayPacks = this.decodePacks(rawReplayPacks)
             if (replayPacks) {
-                window.__ReplayPacks__ = replayPacks
+                window.G_REPLAY_PACKS = replayPacks
                 return replayPacks
             }
             return null
@@ -12829,14 +18651,20 @@ var TimeCat = (function (exports) {
             })
             return packs
         }
+        destroy() {
+            this.destroyStore.forEach(un => un())
+        }
     }
 
-    const version$1 = '1.2.0-alpha.2'
+    const version$1 = '1.2.0-alpha.8'
 
     exports.Player = Player
     exports.Recorder = Recorder
+    exports.classifyRecords = classifyRecords
     exports.exportReplay = exportReplay
+    exports.radix64 = radix64
     exports.version = version$1
 
     return exports
 })({})
+//# sourceMappingURL=timecat.global.js.map
