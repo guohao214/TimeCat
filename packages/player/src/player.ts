@@ -13,11 +13,12 @@ import {
 } from '@timecat/utils'
 import { ProgressComponent } from './progress'
 import { ContainerComponent } from './container'
-import { RecordData, AudioData, SnapshotRecord, ReplayPack, ReplayData } from '@timecat/share'
+import { RecordData, AudioData, SnapshotRecord, ReplayPack, ReplayData, ReplayInternalOptions } from '@timecat/share'
 import { BroadcasterComponent } from './broadcaster'
 import { AnimationFrame } from './animation-frame'
 
 export class PlayerComponent {
+    options: ReplayInternalOptions
     c: ContainerComponent
     pointer: PointerComponent
     progress: ProgressComponent
@@ -48,11 +49,13 @@ export class PlayerComponent {
     RAF: AnimationFrame
 
     constructor(
+        options: ReplayInternalOptions,
         c: ContainerComponent,
         pointer: PointerComponent,
         progress: ProgressComponent,
         broadcaster: BroadcasterComponent
     ) {
+        this.options = options
         this.c = c
         this.pointer = pointer
         this.progress = progress
@@ -64,6 +67,7 @@ export class PlayerComponent {
         if (!this.records.length) {
             // is live mode
             window.addEventListener('record-data', this.streamHandle.bind(this))
+            this.options.destroyStore.add(() => window.removeEventListener('record-data', this.streamHandle.bind(this)))
         } else {
             reduxStore.subscribe('player', state => {
                 if (state) {
@@ -112,7 +116,7 @@ export class PlayerComponent {
     streamHandle(this: PlayerComponent, e: CustomEvent) {
         const frame = e.detail as RecordData
         if (isSnapshot(frame)) {
-            window.__ReplayData__.snapshot = frame as SnapshotRecord
+            window.G_REPLAY_DATA.snapshot = frame as SnapshotRecord
             this.c.setViewState()
             return
         }
@@ -120,7 +124,7 @@ export class PlayerComponent {
     }
 
     initViewState() {
-        const { __ReplayPacks__: packs } = window
+        const { G_REPLAY_PACKS: packs } = window
         const firstPack = packs[0] as ReplayPack
         const firstData = firstPack.body[0]
         this.records = firstData.records
@@ -138,13 +142,13 @@ export class PlayerComponent {
 
         this.curViewEndTime = +this.records.slice(-1)[0].time
         this.curViewDiffTime = 0
-        window.__ReplayData__ = firstData
+        window.G_REPLAY_DATA = firstData
     }
 
     async switchNextView(delayTime?: number) {
-        const { __ReplayData__: rData, __ReplayPacks__: packs } = window as {
-            __ReplayData__: ReplayData
-            __ReplayPacks__: ReplayPack[]
+        const { G_REPLAY_DATA: rData, G_REPLAY_PACKS: packs } = window as {
+            G_REPLAY_DATA: ReplayData
+            G_REPLAY_PACKS: ReplayPack[]
         }
 
         if (!this.records) {
@@ -180,7 +184,7 @@ export class PlayerComponent {
         const nextStartTime = +nextData.records[0].time
         this.curViewDiffTime += nextStartTime - curEndTime
 
-        window.__ReplayData__ = nextData
+        window.G_REPLAY_DATA = nextData
         this.records = nextData.records
         this.audioData = nextData.audio
         this.initAudio()
@@ -212,6 +216,7 @@ export class PlayerComponent {
 
         const maxFps = 30
         this.RAF = new AnimationFrame(loop.bind(this), maxFps)
+        this.options.destroyStore.add(() => this.RAF.stop())
         this.RAF.start()
 
         const initTime = getTime()
@@ -231,8 +236,8 @@ export class PlayerComponent {
             let nextTime = Number(this.frames[this.frameIndex])
 
             if (nextTime > this.curViewEndTime - this.curViewDiffTime) {
-                // delay 200ms wait for all frame finished and switch next
-                await this.switchNextView(200)
+                // delay 300ms wait for all frame finished and switch next
+                await this.switchNextView(300)
             }
 
             while (nextTime && currTime >= nextTime) {
@@ -351,8 +356,8 @@ export class PlayerComponent {
         this.audioNode.currentTime = 0
     }
 
-    execFrame(this: PlayerComponent, record: RecordData) {
-        setTimeout(() => updateDom.call(this, record), 0)
+    async execFrame(this: PlayerComponent, record: RecordData) {
+        updateDom.call(this, record)
     }
 
     getPercentInterval() {

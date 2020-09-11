@@ -13,7 +13,7 @@ run()
 async function run() {
     execa(
         'rollup',
-        ['-wc', '--environment', [`NODE_ENV:${env}`, `TARGET:${target}`, `FORMATS:${formats || 'global'}`]],
+        ['-wc', '--environment', [`NODE_ENV:${env}`, `TARGET:${target}`, `FORMATS:${formats || 'global|esm|cjs'}`]],
         {
             stdio: 'inherit'
         }
@@ -26,6 +26,7 @@ async function run() {
         server: [resolvePackage('dist'), resolveRoot('examples')],
         port: 4321,
         notify: false,
-        open: false
+        open: false,
+        cors: true
     })
 }

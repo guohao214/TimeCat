@@ -1,18 +1,24 @@
-import { ReplayHead, RecordType, HeadRecord } from '@timecat/share'
-import { getRadix64TimeStr, getRandomCode, getTime } from '@timecat/utils'
+import { ReplayHead } from '@timecat/share'
+import { getRandomCode, getTime } from '@timecat/utils'
 import pkg from 'pkg'
+import Fingerprint2 from 'fingerprintjs2'
 
-export function getHeadData() {
+export async function getHeadData() {
+    const fp = await Fingerprint2.getPromise({}).then(components => {
+        const values = components.map(component => {
+            return component.value
+        })
+        const murmur = Fingerprint2.x64hash128(values.join(''), 31)
+        return murmur
+    })
+
     return {
-        type: RecordType.HEAD,
-        data: <ReplayHead>{
-            href: location.href,
-            sessionId: getRandomCode(),
-            userAgent: navigator.userAgent,
-            platform: navigator.platform,
-            beginTime: getTime().toString(),
-            version: pkg.version
-        },
-        time: getRadix64TimeStr()
-    } as HeadRecord
+        href: location.href,
+        relatedId: getRandomCode(),
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        beginTime: getTime().toString(),
+        version: pkg.version,
+        fp
+    } as ReplayHead
 }

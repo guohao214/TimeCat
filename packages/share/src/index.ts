@@ -12,13 +12,7 @@ export interface InfoData {
     frameId: number | null
 }
 
-export interface SnapshotRecord {
-    type: RecordType.SNAPSHOT
-    data: {
-        vNode: VNode
-    } & InfoData
-    time: string
-}
+export type SnapshotRecord = BaseRecord<RecordType.SNAPSHOT, { vNode: VNode } & InfoData>
 
 type Extra = {
     props?: {
@@ -73,52 +67,33 @@ export enum MouseEventType {
     'CLICK'
 }
 
-export interface TerminateRecord {
-    type: RecordType.TERMINATE
-    data: null
-    time: string
-}
-export interface WindowRecord {
-    type: RecordType.WINDOW
-    data: WindowWatcherData
-    time: string
-}
+export type TerminateRecord = BaseRecord<RecordType.TERMINATE, null>
 
-export interface WindowWatcherData {
+export type WindowRecord = BaseRecord<RecordType.WINDOW, WindowRecordData>
+
+export interface WindowRecordData {
     id: number | null
     width: number
     height: number
 }
 
-export interface ScrollRecord {
-    type: RecordType.SCROLL
-    data: ScrollWatcherData
-    time: string
-}
+export type ScrollRecord = BaseRecord<RecordType.SCROLL, ScrollRecordData>
 
-export interface ScrollWatcherData {
+export interface ScrollRecordData {
     id: number | null
     top: number
     left: number
 }
 
-export interface MouseRecord {
-    type: RecordType.MOUSE
-    data: MouseRecordData
-    time: string
-}
+export type MouseRecord = BaseRecord<RecordType.MOUSE, MouseRecordData>
 export interface MouseRecordData {
     type: MouseEventType
     x: number
     y: number
     id?: number
 }
-export interface DOMRecord {
-    type: RecordType.DOM
-    data: DOMWatcherData
-    time: string
-}
-export type DOMWatcherData = DOMUpdateDataType
+
+export type DOMRecord = BaseRecord<RecordType.DOM, DOMRecordData>
 
 export interface AttributesUpdateData {
     id: number
@@ -149,21 +124,17 @@ export interface RemoveUpdateData {
     id: number
 }
 
-export interface DOMUpdateDataType {
-    addedNodes: UpdateNodeData[]
-    movedNodes: movedNodesData[]
-    removedNodes: RemoveUpdateData[]
-    attrs: AttributesUpdateData[]
-    texts: CharacterDataUpdateData[]
+export interface DOMRecordData {
+    addedNodes?: UpdateNodeData[]
+    movedNodes?: movedNodesData[]
+    removedNodes?: RemoveUpdateData[]
+    attrs?: AttributesUpdateData[]
+    texts?: CharacterDataUpdateData[]
 }
 
-export interface FormElementRecord {
-    type: RecordType.FORM_EL
-    data: FormElementWatcherData
-    time: string
-}
+export type FormElementRecord = BaseRecord<RecordType.FORM_EL, FormElementRecordData>
 
-export interface FormElementWatcherData {
+export interface FormElementRecordData {
     type: FormElementEvent
     id: number
     key?: string
@@ -178,11 +149,7 @@ interface FormElementStrPatches {
     len?: number | undefined
 }
 
-export interface AudioRecord {
-    type: RecordType.AUDIO
-    data: AudioStrList | AudioOptions
-    time: string
-}
+export type AudioRecord = BaseRecord<RecordType.AUDIO, AudioStrList | AudioOptions>
 export interface AudioOptions {
     type: 'opts'
     data: RecorderOptions
@@ -192,11 +159,7 @@ export interface AudioStrList {
     data: string[]
 }
 
-export interface LocationRecord {
-    type: RecordType.LOCATION
-    data: LocationRecordData
-    time: string
-}
+export type LocationRecord = BaseRecord<RecordType.LOCATION, LocationRecordData>
 
 export interface LocationRecordData {
     href: string
@@ -204,11 +167,7 @@ export interface LocationRecordData {
     hash: string
     contextNodeId: number
 }
-export interface CanvasRecord {
-    type: RecordType.CANVAS
-    data: CanvasRecordData
-    time: string
-}
+export type CanvasRecord = BaseRecord<RecordType.CANVAS, CanvasRecordData>
 
 export type CanvasRecordData = CanvasMutationRecordData | CanvasInitRecordData
 
@@ -254,13 +213,17 @@ interface SubtitlesData {
     text: string
 }
 
+export interface RecordInternalOptions extends RecordOptions {
+    context: Window
+    skip?: boolean
+}
+
 export interface RecordOptions {
     mode?: 'live' | 'default'
-    context?: Window
     audio?: boolean
-    skip?: boolean
+    write?: boolean
     uploadUrl?: string
-    onData?: (data: RecordData, db: any) => RecordData | void
+    plugins?: any[]
 }
 
 export interface RecorderOptions {
@@ -279,8 +242,9 @@ export enum TransactionMode {
 
 export type WatcherOptions<T extends RecordData | HeadRecord> = {
     context: Window
-    reverseStore: Set<Function>
+    listenStore: Set<Function>
     emit: RecordEvent<T>
+    relatedId: string
 }
 
 export interface Constructable<T> {
@@ -289,11 +253,16 @@ export interface Constructable<T> {
 
 export interface ReplayOptions {
     mode?: 'live' | 'default'
-    fetch?: { url: string; options?: RequestInit }
     receiver?: (sender: (data: RecordData) => void) => void
     proxy?: string
     autoplay?: boolean
-    replayPacks?: ReplayPack[]
+    packs?: ReplayPack[]
+    records?: RecordData[]
+    target?: string | HTMLElement | Window
+}
+
+export interface ReplayInternalOptions extends ReplayOptions {
+    destroyStore: Set<Function>
 }
 
 export interface ReplayPack {
@@ -311,7 +280,7 @@ export interface ReplayData {
 export interface ReplayHead {
     version: string
     href: string
-    sessionId: string
+    relatedId: string
     userAgent: string
     platform: string
     beginTime: string
@@ -321,8 +290,11 @@ export interface ReplayHead {
     }
 }
 
-export interface HeadRecord {
-    type: RecordType.HEAD
-    data: ReplayHead
+export type HeadRecord = BaseRecord<RecordType.HEAD, ReplayHead>
+
+export interface BaseRecord<T, D = any> {
+    type: T
+    data: D
     time: string
+    relatedId: string
 }

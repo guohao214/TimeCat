@@ -7,7 +7,8 @@ import {
     isSnapshot,
     classifyRecords,
     radix64,
-    logError
+    logError,
+    nodeStore
 } from '@timecat/utils'
 import { ContainerComponent } from './container'
 import { Panel } from './panel'
@@ -20,36 +21,39 @@ import {
     ReplayData,
     ReplayPack,
     RecordType,
-    ReplayHead
+    ReplayHead,
+    ReplayInternalOptions
 } from '@timecat/share'
 import { waitStart, removeStartPage, showStartMask } from './dom'
-import smoothScroll from 'smoothscroll-polyfill'
 
-const defaultReplayOptions = { autoplay: true, mode: 'default' } as ReplayOptions
+const defaultReplayOptions = { autoplay: true, mode: 'default', target: window } as ReplayOptions
 
-export default class Player {
+export class Player {
     fmp: FMP
-    constructor(options: ReplayOptions) {
+    destroyStore = new Set<Function>()
+    constructor(options?: ReplayOptions) {
+        nodeStore.reset()
         this.init(options)
     }
 
-    async init(options: ReplayOptions) {
-        const opts = { ...defaultReplayOptions, ...options }
+    async init(options?: ReplayOptions) {
+        const opts = { destroyStore: this.destroyStore, ...defaultReplayOptions, ...options } as ReplayInternalOptions
 
-        window.__ReplayOptions__ = opts
-        smoothScroll.polyfill()
+        window.G_REPLAY_OPTIONS = opts
+
+        this.destroyStore.add(() => reduxStore.unsubscribe())
 
         const replayPacks = await this.getReplayData(opts)
 
-        if (!replayPacks) {
+        if (!replayPacks || !replayPacks.length) {
             return
         }
 
-        const { records, audio } = (window.__ReplayData__ = this.getFirstReplayData(replayPacks))
+        const { records, audio } = (window.G_REPLAY_DATA = this.getFirstReplayData(replayPacks))
         const hasAudio = audio && (audio.src || audio.bufferStrList.length)
 
-        const c = new ContainerComponent()
-        new Panel(c)
+        const c = new ContainerComponent(opts)
+        new Panel(c, opts)
 
         showStartMask()
 
@@ -64,7 +68,7 @@ export default class Player {
             if (records.length) {
                 const firstRecord = records[0]
 
-                const replayPacks = window.__ReplayPacks__ as ReplayPack[]
+                const replayPacks = window.G_REPLAY_PACKS as ReplayPack[]
                 const startTime = firstRecord.time
                 const endTime =
                     replayPacks.reduce((packAcc, pack) => {
@@ -111,7 +115,7 @@ export default class Player {
     }
 
     getGZipData() {
-        const data = window.__ReplayStrPacks__
+        const data = window.G_REPLAY_STR_PACKS
         if (!data) {
             return null
         }
@@ -134,10 +138,6 @@ export default class Player {
     dispatchEvent(type: string, data: RecordData) {
         event = new CustomEvent(type, { detail: data })
         window.dispatchEvent(event)
-    }
-
-    async fetchData(input: RequestInfo, init?: RequestInit): Promise<ReplayPack[]> {
-        return fetch(input, init).then(res => res.json())
     }
 
     async dataReceiver(receiver: (sender: (data: RecordData) => void) => void): Promise<ReplayPack[]> {
@@ -195,16 +195,16 @@ export default class Player {
         return null
     }
 
-    async getReplayData(options: ReplayOptions) {
-        const { receiver, replayPacks: data, fetch } = options
+    async getReplayData(options: ReplayInternalOptions) {
+        const { receiver, packs, records } = options
 
         const rawReplayPacks =
-            data ||
-            (fetch && (await this.fetchData(fetch.url, fetch.options))) ||
+            (records && classifyRecords(records)) ||
+            packs ||
             (receiver && (await this.dataReceiver(receiver))) ||
             this.getGZipData() ||
             (await this.getDataFromDB()) ||
-            window.__ReplayPacks__
+            window.G_REPLAY_PACKS
 
         if (!rawReplayPacks) {
             throw logError('Replay data not found')
@@ -213,7 +213,7 @@ export default class Player {
         const replayPacks = this.decodePacks(rawReplayPacks)
 
         if (replayPacks) {
-            window.__ReplayPacks__ = replayPacks
+            window.G_REPLAY_PACKS = replayPacks
             return replayPacks
         }
 
@@ -232,5 +232,9 @@ export default class Player {
             })
         })
         return packs
+    }
+
+    destroy() {
+        this.destroyStore.forEach(un => un())
     }
 }
