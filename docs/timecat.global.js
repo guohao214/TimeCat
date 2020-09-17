@@ -1,6 +1,48 @@
 var TimeCat = (function (exports) {
     'use strict'
 
+    /*! *****************************************************************************
+    Copyright (c) Microsoft Corporation. All rights reserved.
+    Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+    this file except in compliance with the License. You may obtain a copy of the
+    License at http://www.apache.org/licenses/LICENSE-2.0
+
+    THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
+    WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
+    MERCHANTABLITY OR NON-INFRINGEMENT.
+
+    See the Apache Version 2.0 License for specific language governing permissions
+    and limitations under the License.
+    ***************************************************************************** */
+
+    function __awaiter(thisArg, _arguments, P, generator) {
+        return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) {
+                try {
+                    step(generator.next(value))
+                } catch (e) {
+                    reject(e)
+                }
+            }
+            function rejected(value) {
+                try {
+                    step(generator['throw'](value))
+                } catch (e) {
+                    reject(e)
+                }
+            }
+            function step(result) {
+                result.done
+                    ? resolve(result.value)
+                    : new P(function (resolve) {
+                          resolve(result.value)
+                      }).then(fulfilled, rejected)
+            }
+            step((generator = generator.apply(thisArg, _arguments || [])).next())
+        })
+    }
+
     class NodeStore {
         constructor() {
             this.createNodeId = () => NodeStore.nodeId++
@@ -49,22 +91,25 @@ var TimeCat = (function (exports) {
         RecordType[(RecordType['CANVAS'] = 9)] = 'CANVAS'
         RecordType[(RecordType['TERMINATE'] = 10)] = 'TERMINATE'
     })(exports.RecordType || (exports.RecordType = {}))
+    var FormElementEvent
     ;(function (FormElementEvent) {
         FormElementEvent[(FormElementEvent['PROP'] = 0)] = 'PROP'
         FormElementEvent[(FormElementEvent['INPUT'] = 1)] = 'INPUT'
         FormElementEvent[(FormElementEvent['CHANGE'] = 2)] = 'CHANGE'
         FormElementEvent[(FormElementEvent['FOCUS'] = 3)] = 'FOCUS'
         FormElementEvent[(FormElementEvent['BLUR'] = 4)] = 'BLUR'
-    })(exports.FormElementEvent || (exports.FormElementEvent = {}))
+    })(FormElementEvent || (FormElementEvent = {}))
+    var MouseEventType
     ;(function (MouseEventType) {
         MouseEventType[(MouseEventType['MOVE'] = 0)] = 'MOVE'
         MouseEventType[(MouseEventType['CLICK'] = 1)] = 'CLICK'
-    })(exports.MouseEventType || (exports.MouseEventType = {}))
+    })(MouseEventType || (MouseEventType = {}))
+    var TransactionMode
     ;(function (TransactionMode) {
         TransactionMode['READONLY'] = 'readonly'
         TransactionMode['READWRITE'] = 'readwrite'
         TransactionMode['VERSIONCHANGE'] = 'versionchange'
-    })(exports.TransactionMode || (exports.TransactionMode = {}))
+    })(TransactionMode || (TransactionMode = {}))
 
     class IndexedDBOperator {
         constructor(DBName, version, storeName, callback) {
@@ -103,57 +148,71 @@ var TimeCat = (function (exports) {
             })
         }
         getStore() {
-            return this.withIDBStore(exports.TransactionMode.READWRITE)
+            return this.withIDBStore(TransactionMode.READWRITE)
         }
-        async add(data) {
-            const store = await this.getStore()
-            store.add(data)
-            this.triggerEvent('add')
+        add(data) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const store = yield this.getStore()
+                store.add(data)
+                this.triggerEvent('add')
+            })
         }
-        async addRecord(data) {
-            await this.add(data)
+        addRecord(data) {
+            return __awaiter(this, void 0, void 0, function* () {
+                yield this.add(data)
+            })
         }
-        async clear() {
-            const store = await this.getStore()
-            store.clear()
+        clear() {
+            return __awaiter(this, void 0, void 0, function* () {
+                const store = yield this.getStore()
+                store.clear()
+            })
         }
-        async readAllRecords() {
-            return await this.readRecords()
+        readAllRecords() {
+            return __awaiter(this, void 0, void 0, function* () {
+                return yield this.readRecords()
+            })
         }
-        async readRecords(options) {
-            const { limit } = options || {}
-            const store = await this.getStore()
-            const records = []
-            return new Promise(resolve => {
-                store.openCursor().onsuccess = event => {
-                    const cursor = event.target.result
-                    if (limit && records.length >= limit) {
-                        return resolve(records)
+        readRecords(options) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const { limit } = options || {}
+                const store = yield this.getStore()
+                const records = []
+                return new Promise(resolve => {
+                    store.openCursor().onsuccess = event => {
+                        const cursor = event.target.result
+                        if (limit && records.length >= limit) {
+                            return resolve(records)
+                        }
+                        if (cursor) {
+                            records.push(cursor.value)
+                            cursor.continue()
+                            return
+                        }
+                        resolve(records)
                     }
-                    if (cursor) {
-                        records.push(cursor.value)
-                        cursor.continue()
-                        return
+                }).then(arr => (arr.length ? arr : null))
+            })
+        }
+        deleteRecords(options) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const { lowerBound, upperBound } = options || {}
+                if (lowerBound && upperBound) {
+                    const keyRange = IDBKeyRange.bound(lowerBound, upperBound)
+                    const store = yield this.getStore()
+                    store.delete(keyRange)
+                }
+            })
+        }
+        count() {
+            return __awaiter(this, void 0, void 0, function* () {
+                const store = yield this.getStore()
+                return new Promise(resolve => {
+                    store.count().onsuccess = event => {
+                        const count = event.target.result
+                        resolve(count)
                     }
-                    resolve(records)
-                }
-            }).then(arr => (arr.length ? arr : null))
-        }
-        async deleteRecords(options) {
-            const { lowerBound, upperBound } = options || {}
-            if (lowerBound && upperBound) {
-                const keyRange = IDBKeyRange.bound(lowerBound, upperBound)
-                const store = await this.getStore()
-                store.delete(keyRange)
-            }
-        }
-        async count() {
-            const store = await this.getStore()
-            return new Promise(resolve => {
-                store.count().onsuccess = event => {
-                    const count = event.target.result
-                    resolve(count)
-                }
+                })
             })
         }
         triggerEvent(name) {
@@ -168,266 +227,6 @@ var TimeCat = (function (exports) {
             resolve(DBOperator)
         })
     })
-
-    const initState = {
-        speed: 0
-    }
-    var PlayerTypes
-    ;(function (PlayerTypes) {
-        PlayerTypes['RESET'] = 'RESET'
-        PlayerTypes['SPEED'] = 'SPEED'
-    })(PlayerTypes || (PlayerTypes = {}))
-    function PlayerReducer(state, action) {
-        if (!state) {
-            state = initState
-        }
-        if (!action) {
-            return state
-        }
-        const { type, data } = action
-        switch (type) {
-            case PlayerTypes.RESET:
-                return initState
-            case PlayerTypes.SPEED:
-                return {
-                    ...state,
-                    ...data
-                }
-            default:
-                return state
-        }
-    }
-
-    const initState$1 = {
-        frame: 0,
-        length: 0,
-        curTime: 0,
-        startTime: 0,
-        endTime: 0
-    }
-    var ProgressTypes
-    ;(function (ProgressTypes) {
-        ProgressTypes['RESET'] = 'RESET'
-        ProgressTypes['FORWARD'] = 'FORWARD'
-        ProgressTypes['BACKWARD'] = 'BACKWARD'
-        ProgressTypes['INFO'] = 'INFO'
-    })(ProgressTypes || (ProgressTypes = {}))
-    function progressReducer(state, action) {
-        if (!state) {
-            state = initState$1
-        }
-        if (!action) {
-            return state
-        }
-        const { type, data } = action
-        switch (type) {
-            case ProgressTypes.RESET:
-                return initState$1
-            case ProgressTypes.FORWARD:
-                return {
-                    ...state,
-                    frame: data.frame,
-                    curTime: data.curTime
-                }
-            case ProgressTypes.BACKWARD:
-                return {
-                    ...state,
-                    frame: data.frame
-                }
-            case ProgressTypes.INFO:
-                return {
-                    ...state,
-                    ...data
-                }
-            default:
-                return state
-        }
-    }
-
-    function objectEquals(x, y) {
-        if (x === null || x === undefined || y === null || y === undefined) {
-            return x === y
-        }
-        if (x.constructor !== y.constructor) {
-            return false
-        }
-        if (x instanceof Function) {
-            return x === y
-        }
-        if (x instanceof RegExp) {
-            return x === y
-        }
-        if (x === y || x.valueOf() === y.valueOf()) {
-            return true
-        }
-        if (Array.isArray(x) && x.length !== y.length) {
-            return false
-        }
-        if (x instanceof Date) {
-            return false
-        }
-        if (!(x instanceof Object)) {
-            return false
-        }
-        if (!(y instanceof Object)) {
-            return false
-        }
-        const p = Object.keys(x)
-        return (
-            Object.keys(y).every(function (i) {
-                return p.indexOf(i) !== -1
-            }) &&
-            p.every(function (i) {
-                return objectEquals(x[i], y[i])
-            })
-        )
-    }
-    function throttle(func, wait, options = { leading: false, trailing: false }) {
-        let context
-        let args
-        let result
-        let timeout = null
-        let previous = 0
-        const later = function () {
-            previous = options.leading === false ? 0 : Date.now()
-            timeout = null
-            result = func.apply(context, args)
-            if (!timeout) context = args = null
-        }
-        return function () {
-            const now = Date.now()
-            if (!previous && options.leading === false) previous = now
-            const remaining = wait - (now - previous)
-            context = this
-            args = arguments
-            if (remaining <= 0 || remaining > wait) {
-                if (timeout) {
-                    clearTimeout(timeout)
-                    timeout = null
-                }
-                previous = now
-                result = func.apply(context, args)
-                if (!timeout) context = args = null
-            } else if (!timeout && options.trailing !== false) {
-                timeout = setTimeout(later, remaining)
-            }
-            return result
-        }
-    }
-    function debounce(
-        func,
-        waitMilliseconds,
-        options = {
-            isImmediate: false
-        }
-    ) {
-        let timeoutId
-        return function (...args) {
-            const context = this
-            const doLater = function () {
-                timeoutId = undefined
-                if (!options.isImmediate) {
-                    func.apply(context, args)
-                }
-            }
-            const shouldCallNow = options.isImmediate && timeoutId === undefined
-            if (timeoutId !== undefined) {
-                clearTimeout(timeoutId)
-            }
-            timeoutId = setTimeout(doLater, waitMilliseconds)
-            if (shouldCallNow) {
-                func.apply(context, args)
-            }
-        }
-    }
-
-    function createStore(reducer, initState = {}) {
-        let state = initState
-        let topics = {
-            all: []
-        }
-        function unsubscribe() {
-            state = reducer(state, { type: 'RESET', data: {} })
-            topics = { all: [] }
-        }
-        function subscribe(...args) {
-            let type = 'all'
-            let listener
-            if (typeof args[0] === 'string') {
-                type = args[0]
-                listener = args[1]
-            } else {
-                listener = args[0]
-            }
-            if (!topics[type]) {
-                topics[type] = []
-            }
-            topics[type].push(listener)
-        }
-        function dispatch(action) {
-            const oldState = state
-            state = reducer(state, action)
-            if (!action) {
-                if (topics['all']) {
-                    topics['all'].forEach(listener => listener(state))
-                }
-                return
-            }
-            const topicName = getTypeInTopics(action.type)
-            if (topicName && topics[topicName]) {
-                return topics[topicName].forEach(listener => {
-                    if (!objectEquals(state[topicName], oldState[topicName])) {
-                        listener(state[topicName])
-                    }
-                })
-            }
-        }
-        function getState(name) {
-            const s = state
-            if (name) {
-                return s[name]
-            }
-            return s
-        }
-        function getTypeInTopics(type) {
-            const topics = {
-                player: Object.keys(PlayerTypes),
-                progress: Object.keys(ProgressTypes)
-            }
-            for (const [key, enums] of Object.entries(topics)) {
-                if (enums.includes(type)) {
-                    return key
-                }
-            }
-        }
-        return {
-            unsubscribe,
-            subscribe,
-            dispatch,
-            getState
-        }
-    }
-
-    function combineReducers(reducers) {
-        const reducerKeys = Object.keys(reducers)
-        return function combination(state, action) {
-            const nextState = {}
-            for (let i = 0; i < reducerKeys.length; i++) {
-                const key = reducerKeys[i]
-                const reducer = reducers[key]
-                const previousStateForKey = state[key]
-                const nextStateForKey = reducer(previousStateForKey, action)
-                nextState[key] = nextStateForKey
-            }
-            return nextState
-        }
-    }
-
-    const reducer = combineReducers({
-        player: PlayerReducer,
-        progress: progressReducer
-    })
-    const reduxStore = createStore(reducer)
 
     var commonjsGlobal =
         typeof globalThis !== 'undefined'
@@ -1477,7 +1276,7 @@ var TimeCat = (function (exports) {
                             if (lines.length <= options.context * 2 && i < diff.length - 2) {
                                 var _curRange2
 
-                                // Overlapping
+                                    // Overlapping
                                 ;(_curRange2 = curRange).push.apply(_curRange2, _toConsumableArray(contextLines(lines)))
                             } else {
                                 var _curRange3
@@ -1775,12 +1574,12 @@ var TimeCat = (function (exports) {
                     } else if (mineCurrent[0] === '+' && theirCurrent[0] === ' ') {
                         var _hunk$lines
 
-                        // Mine inserted
+                            // Mine inserted
                         ;(_hunk$lines = hunk.lines).push.apply(_hunk$lines, _toConsumableArray(collectChange(mine)))
                     } else if (theirCurrent[0] === '+' && mineCurrent[0] === ' ') {
                         var _hunk$lines2
 
-                        // Theirs inserted
+                            // Theirs inserted
                         ;(_hunk$lines2 = hunk.lines).push.apply(_hunk$lines2, _toConsumableArray(collectChange(their)))
                     } else if (mineCurrent[0] === '-' && theirCurrent[0] === ' ') {
                         // Mine removed or edited
@@ -1815,7 +1614,6 @@ var TimeCat = (function (exports) {
                         skipRemoveSuperset(their, myChanges, myChanges.length - theirChanges.length)
                     ) {
                         var _hunk$lines3
-
                         ;(_hunk$lines3 = hunk.lines).push.apply(_hunk$lines3, _toConsumableArray(myChanges))
 
                         return
@@ -1824,14 +1622,12 @@ var TimeCat = (function (exports) {
                         skipRemoveSuperset(mine, theirChanges, theirChanges.length - myChanges.length)
                     ) {
                         var _hunk$lines4
-
                         ;(_hunk$lines4 = hunk.lines).push.apply(_hunk$lines4, _toConsumableArray(theirChanges))
 
                         return
                     }
                 } else if (arrayEqual(myChanges, theirChanges)) {
                     var _hunk$lines5
-
                     ;(_hunk$lines5 = hunk.lines).push.apply(_hunk$lines5, _toConsumableArray(myChanges))
 
                     return
@@ -1846,7 +1642,6 @@ var TimeCat = (function (exports) {
 
                 if (theirChanges.merged) {
                     var _hunk$lines6
-
                     ;(_hunk$lines6 = hunk.lines).push.apply(_hunk$lines6, _toConsumableArray(theirChanges.merged))
                 } else {
                     conflict(hunk, swap ? theirChanges : myChanges, swap ? myChanges : theirChanges)
@@ -2233,9 +2028,11 @@ var TimeCat = (function (exports) {
         })
         return packs
     }
-    async function delay(t = 200) {
-        return new Promise(r => {
-            setTimeout(() => r(), t)
+    function delay(t = 200) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return new Promise(r => {
+                setTimeout(() => r(), t)
+            })
         })
     }
     function isVNode(n) {
@@ -2298,6 +2095,65 @@ var TimeCat = (function (exports) {
         return patches
     }
 
+    function throttle(func, wait, options = { leading: false, trailing: false }) {
+        let context
+        let args
+        let result
+        let timeout = null
+        let previous = 0
+        const later = function () {
+            previous = options.leading === false ? 0 : Date.now()
+            timeout = null
+            result = func.apply(context, args)
+            if (!timeout) context = args = null
+        }
+        return function () {
+            const now = Date.now()
+            if (!previous && options.leading === false) previous = now
+            const remaining = wait - (now - previous)
+            context = this
+            args = arguments
+            if (remaining <= 0 || remaining > wait) {
+                if (timeout) {
+                    clearTimeout(timeout)
+                    timeout = null
+                }
+                previous = now
+                result = func.apply(context, args)
+                if (!timeout) context = args = null
+            } else if (!timeout && options.trailing !== false) {
+                timeout = setTimeout(later, remaining)
+            }
+            return result
+        }
+    }
+    function debounce(
+        func,
+        waitMilliseconds,
+        options = {
+            isImmediate: false
+        }
+    ) {
+        let timeoutId
+        return function (...args) {
+            const context = this
+            const doLater = function () {
+                timeoutId = undefined
+                if (!options.isImmediate) {
+                    func.apply(context, args)
+                }
+            }
+            const shouldCallNow = options.isImmediate && timeoutId === undefined
+            if (timeoutId !== undefined) {
+                clearTimeout(timeoutId)
+            }
+            timeoutId = setTimeout(doLater, waitMilliseconds)
+            if (shouldCallNow) {
+                func.apply(context, args)
+            }
+        }
+    }
+
     class RecoverNative {
         constructor() {
             const frame = document.createElement('iframe')
@@ -2355,9 +2211,6 @@ var TimeCat = (function (exports) {
 
     const snapshot = () => window.G_REPLAY_DATA && window.G_REPLAY_DATA.snapshot.data
     const href = () => snapshot().href
-    function filteringTemplate(tpl) {
-        return tpl
-    }
     function isElementNode(node) {
         return node.nodeType === Node.ELEMENT_NODE
     }
@@ -2365,24 +2218,11 @@ var TimeCat = (function (exports) {
         const reg = /<\/script>/g
         return str.replace(reg, '<\\/script>')
     }
-    function proxyResource(url) {
-        const { proxy } = window.G_REPLAY_OPTIONS
-        if (proxy) {
-            const proxyUrl = stitchingLink(proxy, url)
-            return proxyUrl
-        }
-        return url
-    }
-    function stitchingLink(pre, next) {
-        if (pre.endsWith('/') || next.startsWith('/')) {
-            return pre + next
-        }
-        return pre + '/' + next
-    }
     function completeCssHref(str, parentVNode) {
         return str.replace(/(url\(['"]?((\/{1,2}|\.\.?\/)[^'"]*?)['"]?(?=\)))/g, (string, b, url) => {
             if (!url.startsWith('data')) {
-                const baseUrl = parentVNode?.attrs['css-url'] || href()
+                const baseUrl =
+                    (parentVNode === null || parentVNode === void 0 ? void 0 : parentVNode.attrs['css-url']) || href()
                 const newUrl = new URL(url, baseUrl)
                 return string.replace(url, newUrl.href)
             }
@@ -2397,7 +2237,8 @@ var TimeCat = (function (exports) {
             setTimeout(() => {
                 const doc = node.getRootNode()
                 const context = doc.defaultView
-                const { href, path } = context?.G_REPLAY_LOCATION || {}
+                const { href, path } =
+                    (context === null || context === void 0 ? void 0 : context.G_REPLAY_LOCATION) || {}
                 if (path && href) {
                     const relationHref = new URL(path, href)
                     const attrs = node.getAttributeNames()
@@ -2423,22 +2264,24 @@ var TimeCat = (function (exports) {
     function isExistingNode(node) {
         return node.ownerDocument && !!node.ownerDocument.contains(node)
     }
-    async function getRawScriptContent(src) {
-        if (!src) {
-            return false
-        }
-        if (src.length > 500) {
-            return false
-        }
-        const fullSrc = completeAttrHref(src)
-        if (isValidUrl(fullSrc)) {
-            try {
-                return await getScript(fullSrc)
-            } catch (err) {
+    function getRawScriptContent(src) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!src) {
                 return false
             }
-        }
-        return false
+            if (src.length > 500) {
+                return false
+            }
+            const fullSrc = completeAttrHref(src)
+            if (isValidUrl(fullSrc)) {
+                try {
+                    return yield getScript(fullSrc)
+                } catch (err) {
+                    return false
+                }
+            }
+            return false
+        })
     }
     function isValidUrl(url) {
         try {
@@ -2448,8 +2291,14 @@ var TimeCat = (function (exports) {
         }
         return true
     }
-    async function getScript(src) {
-        return await fetch(src).then(async res => filteringScriptTag(await res.text()))
+    function getScript(src) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return yield fetch(src).then(res =>
+                __awaiter(this, void 0, void 0, function* () {
+                    return filteringScriptTag(yield res.text())
+                })
+            )
+        })
     }
 
     function disableScrolling(target) {
@@ -3384,7 +3233,7 @@ var TimeCat = (function (exports) {
         var prevlen = -1 /* last emitted length */
         var curlen /* length of current code */
 
-        var nextlen = tree[0 * 2 + 1] /* length of next code */ /*.Len*/
+        var nextlen = tree[0 * 2 + 1] /*.Len*/ /* length of next code */
 
         var count = 0 /* repeat count of the current code */
         var max_count = 7 /* max repeat count */
@@ -3443,7 +3292,7 @@ var TimeCat = (function (exports) {
         var prevlen = -1 /* last emitted length */
         var curlen /* length of current code */
 
-        var nextlen = tree[0 * 2 + 1] /* length of next code */ /*.Len*/
+        var nextlen = tree[0 * 2 + 1] /*.Len*/ /* length of next code */
 
         var count = 0 /* repeat count of the current code */
         var max_count = 7 /* max repeat count */
@@ -4716,7 +4565,7 @@ var TimeCat = (function (exports) {
                 if (
                     s.match_length <= 5 &&
                     (s.strategy === Z_FILTERED ||
-                        (s.match_length === MIN_MATCH$1 && s.strstart - s.match_start > 4096) /*TOO_FAR*/)
+                        (s.match_length === MIN_MATCH$1 && s.strstart - s.match_start > 4096)) /*TOO_FAR*/
                 ) {
                     /* If prev_match is also MIN_MATCH, match_start is garbage
                      * but we will ignore the current match anyway.
@@ -9610,31 +9459,35 @@ var TimeCat = (function (exports) {
         extractAudioDataList: [],
         opts: {}
     }
-    async function exportReplay(exportOptions) {
-        recoveryMethods()
-        await addNoneFrame()
-        const parser = new DOMParser()
-        const html = parser.parseFromString(TPL, 'text/html')
-        await injectLoading(html)
-        await injectData(html, exportOptions)
-        await initOptions(html, exportOptions)
-        downloadFiles(html)
+    function exportReplay(exportOptions) {
+        return __awaiter(this, void 0, void 0, function* () {
+            recoveryMethods()
+            yield addNoneFrame()
+            const parser = new DOMParser()
+            const html = parser.parseFromString(TPL, 'text/html')
+            yield injectLoading(html)
+            yield injectData(html, exportOptions)
+            yield initOptions(html, exportOptions)
+            downloadFiles(html)
+        })
     }
     function recoveryMethods() {
         const methods = ['HTMLElement.prototype.appendChild']
         methods.forEach(recoverNative.recoverMethod.bind(recoverNative))
     }
-    async function addNoneFrame() {
-        const DBOperator = await getDBOperator
-        const count = await DBOperator.count()
-        if (count) {
-            DBOperator.add({
-                type: exports.RecordType.TERMINATE,
-                data: null,
-                relatedId: window.G_RECORD_RELATED_ID,
-                time: getRadix64TimeStr()
-            })
-        }
+    function addNoneFrame() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const DBOperator = yield getDBOperator
+            const count = yield DBOperator.count()
+            if (count) {
+                DBOperator.add({
+                    type: exports.RecordType.TERMINATE,
+                    data: null,
+                    relatedId: window.G_RECORD_RELATED_ID,
+                    time: getRadix64TimeStr()
+                })
+            }
+        })
     }
     function downloadHTML(content) {
         const blob = new Blob([content], { type: 'text/html' })
@@ -9645,9 +9498,14 @@ var TimeCat = (function (exports) {
         downloadAudios()
     }
     function downloadAudios() {
+        var _a
         if (window.G_REPLAY_DATA) {
             const replayData = window.G_REPLAY_DATA
-            const audioSrc = replayData?.audio?.src
+            const audioSrc =
+                (_a = replayData === null || replayData === void 0 ? void 0 : replayData.audio) === null ||
+                _a === void 0
+                    ? void 0
+                    : _a.src
             if (audioSrc) {
                 download(audioSrc, audioSrc)
                 return
@@ -9660,46 +9518,52 @@ var TimeCat = (function (exports) {
         })
         downloadAudioConfig.extractAudioDataList.length = 0
     }
-    async function initOptions(html, exportOptions) {
-        const { scripts, autoplay } = exportOptions
-        const options = { autoplay }
-        const scriptList = scripts || []
-        if (!scriptList.some(item => item.name === 'timecat-init')) {
-            scriptList.push({
-                name: 'timecat-init',
-                src: `new TimeCat.Player(${JSON.stringify(options)})`
-            })
-        }
-        await injectScripts(html, scriptList)
-    }
-    async function injectScripts(html, scripts) {
-        if (scripts) {
-            for (const scriptItem of scripts) {
-                const { src, name } = scriptItem
-                let scriptContent = src
-                const script = document.createElement('script')
-                if (name) {
-                    script.id = name
-                }
-                const isUrlReg = /^(chrome-extension|https?):\/\/.+/
-                if (isUrlReg.test(src)) {
-                    {
-                        scriptContent = await getScript(src)
-                    }
-                }
-                script.text = scriptContent
-                html.body.appendChild(script)
+    function initOptions(html, exportOptions) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { scripts, autoplay } = exportOptions
+            const options = { autoplay }
+            const scriptList = scripts || []
+            if (!scriptList.some(item => item.name === 'timecat-init')) {
+                scriptList.push({
+                    name: 'timecat-init',
+                    src: `new TimeCat.Player(${JSON.stringify(options)})`
+                })
             }
-        }
+            yield injectScripts(html, scriptList)
+        })
     }
-    async function getDataFromDB(exportOptions) {
-        const DBOperator = await getDBOperator
-        const data = await DBOperator.readAllRecords()
-        if (data) {
-            const classified = classifyRecords(data)
-            return extract(classified, exportOptions)
-        }
-        return null
+    function injectScripts(html, scripts) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (scripts) {
+                for (const scriptItem of scripts) {
+                    const { src, name } = scriptItem
+                    let scriptContent = src
+                    const script = document.createElement('script')
+                    if (name) {
+                        script.id = name
+                    }
+                    const isUrlReg = /^(chrome-extension|https?):\/\/.+/
+                    if (isUrlReg.test(src)) {
+                        {
+                            scriptContent = yield getScript(src)
+                        }
+                    }
+                    script.text = scriptContent
+                    html.body.appendChild(script)
+                }
+            }
+        })
+    }
+    function getDataFromDB(exportOptions) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const DBOperator = yield getDBOperator
+            const data = yield DBOperator.readAllRecords()
+            if (data) {
+                const classified = classifyRecords(data)
+                return extract(classified, exportOptions)
+            }
+            return null
+        })
     }
     function extract(replayPacks, exportOptions) {
         return replayPacks.map(replayPack => {
@@ -9727,199 +9591,100 @@ var TimeCat = (function (exports) {
         audio.bufferStrList.length = 0
         return audio
     }
-    async function injectLoading(html) {
-        const loadingScriptContent = `const loadingNode = document.createElement('div')
+    function injectLoading(html) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const loadingScriptContent = `const loadingNode = document.createElement('div')
     loadingNode.className = 'pacman-box';
     loadingNode.innerHTML = '<style>${pacmanCss}<\/style><div class="pacman"><div><\/div><div><\/div><div><\/div><div><\/div><div><\/div><\/div>'
     loadingNode.setAttribute('style', 'text-align: center;vertical-align: middle;line-height: 100vh;')
     document.body.insertBefore(loadingNode, document.body.firstChild);window.addEventListener('DOMContentLoaded', () => loadingNode.parentNode.removeChild(loadingNode))`
-        injectScripts(html, [{ src: loadingScriptContent }])
-    }
-    async function injectData(html, exportOptions) {
-        const data = window.G_REPLAY_PACKS || (await getDataFromDB(exportOptions))
-        if (!data) {
-            return
-        }
-        const extractedData = await makeCssInline(data)
-        const jsonStrData = JSON.stringify(extractedData)
-        const zipArray = pako_1.gzip(jsonStrData)
-        let outputStr = ''
-        for (let i = 0; i < zipArray.length; i++) {
-            let num = zipArray[i]
-            if (~[13, 34, 39, 44, 60, 62, 92, 96, 10, 0].indexOf(num)) {
-                num += 300
-            }
-            outputStr += String.fromCharCode(num)
-        }
-        const replayData = `var G_REPLAY_STR_PACKS =  '${outputStr}'`
-        injectScripts(html, [{ src: replayData }])
-    }
-    async function makeCssInline(packs) {
-        const dataList = []
-        packs.forEach(pack => {
-            pack.body.forEach(data => {
-                dataList.push(data)
-            })
+            injectScripts(html, [{ src: loadingScriptContent }])
         })
-        const extractLinkList = []
-        for (let k = 0; k < dataList.length; k++) {
-            const data = dataList[k]
-            const { snapshot, records } = data
-            const tasks = [snapshot.data.vNode]
-            let node
-            while ((node = tasks.shift())) {
-                if (isVNode(node)) {
-                    extractLink(node, extractLinkList)
-                    tasks.push(...node.children)
-                }
+    }
+    function injectData(html, exportOptions) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const data = window.G_REPLAY_PACKS || (yield getDataFromDB(exportOptions))
+            if (!data) {
+                return
             }
-            for (let i = 0; i < records.length; i++) {
-                const record = records[i]
-                if (record.type === exports.RecordType.DOM) {
-                    const { addedNodes } = record.data
-                    if (addedNodes) {
-                        for (let j = 0; j < addedNodes.length; j++) {
-                            const node = addedNodes[j].node
-                            if (isVNode(node)) {
-                                extractLink(node, extractLinkList)
+            const extractedData = yield makeCssInline(data)
+            const jsonStrData = JSON.stringify(extractedData)
+            const zipArray = pako_1.gzip(jsonStrData)
+            let outputStr = ''
+            for (let i = 0; i < zipArray.length; i++) {
+                let num = zipArray[i]
+                if (~[13, 34, 39, 44, 60, 62, 92, 96, 10, 0].indexOf(num)) {
+                    num += 300
+                }
+                outputStr += String.fromCharCode(num)
+            }
+            const replayData = `var G_REPLAY_STR_PACKS =  '${outputStr}'`
+            injectScripts(html, [{ src: replayData }])
+        })
+    }
+    function makeCssInline(packs) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const dataList = []
+            packs.forEach(pack => {
+                pack.body.forEach(data => {
+                    dataList.push(data)
+                })
+            })
+            const extractLinkList = []
+            for (let k = 0; k < dataList.length; k++) {
+                const data = dataList[k]
+                const { snapshot, records } = data
+                const tasks = [snapshot.data.vNode]
+                let node
+                while ((node = tasks.shift())) {
+                    if (isVNode(node)) {
+                        extractLink(node, extractLinkList)
+                        tasks.push(...node.children)
+                    }
+                }
+                for (let i = 0; i < records.length; i++) {
+                    const record = records[i]
+                    if (record.type === exports.RecordType.DOM) {
+                        const { addedNodes } = record.data
+                        if (addedNodes) {
+                            for (let j = 0; j < addedNodes.length; j++) {
+                                const node = addedNodes[j].node
+                                if (isVNode(node)) {
+                                    extractLink(node, extractLinkList)
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-        for (const node of extractLinkList) {
-            const { attrs } = node
-            const href = attrs.href
-            try {
-                const cssURL = new URL(href, location.origin).href
-                const cssValue = await fetch(cssURL).then(res => res.text())
-                const textNode = {
-                    id: nodeStore.createNodeId(),
-                    type: Node.TEXT_NODE,
-                    value: cssValue
-                }
-                delete attrs.href
-                Object.keys(attrs).forEach(key => {
-                    delete attrs[key]
-                })
-                node.tag = 'style'
-                node.attrs.type = 'text/css'
-                node.attrs['css-url'] = cssURL
-                node.children.push(textNode)
-            } catch (error) {}
-        }
-        return packs
+            for (const node of extractLinkList) {
+                const { attrs } = node
+                const href = attrs.href
+                try {
+                    const cssURL = new URL(href, location.origin).href
+                    const cssValue = yield fetch(cssURL).then(res => res.text())
+                    const textNode = {
+                        id: nodeStore.createNodeId(),
+                        type: Node.TEXT_NODE,
+                        value: cssValue
+                    }
+                    delete attrs.href
+                    Object.keys(attrs).forEach(key => {
+                        delete attrs[key]
+                    })
+                    node.tag = 'style'
+                    node.attrs.type = 'text/css'
+                    node.attrs['css-url'] = cssURL
+                    node.children.push(textNode)
+                } catch (error) {}
+            }
+            return packs
+        })
     }
     function extractLink(node, extractLinkList) {
         const { tag, attrs } = node
         if (tag === 'link' && attrs.href && attrs.href.endsWith('.css')) {
             extractLinkList.push(node)
-        }
-    }
-
-    class Transmitter {
-        constructor(uploadUrl) {
-            this.interval = 5000
-            this.bufferSize = 10
-            this.uploadChunksHandle = this.uploadChunks()
-            this.uploadUrl = uploadUrl
-            this.init()
-        }
-        async init() {
-            this.db = await getDBOperator
-            this.uploadChunksHandle()
-            this.db.listen('add', this.uploadChunksHandle.bind(this))
-        }
-        uploadChunks() {
-            let timer = null
-            let checkNext = false
-            const self = this
-            return async () => {
-                if (timer) {
-                    return
-                }
-                timer = window.setTimeout(clear, this.interval)
-                function clear() {
-                    clearTimeout(timer)
-                    timer = 0
-                    if (checkNext) {
-                        self.uploadChunksHandle()
-                    }
-                }
-                await delay(1000)
-                const records = await this.db.readRecords({ limit: this.bufferSize })
-                if (records) {
-                    if (await this.uploadToDB(records)) {
-                        const range = { lowerBound: records[0].id, upperBound: records.slice(-1)[0].id }
-                        this.db.deleteRecords(range)
-                    }
-                    checkNext = true
-                    return
-                }
-                checkNext = false
-            }
-        }
-        async uploadToDB(records) {
-            return await fetch(this.uploadUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(records)
-            }).then(() => true)
-        }
-    }
-
-    class FMP {
-        constructor() {
-            this.interval = 1000
-            this.len = 0
-            this.resolved = false
-            this.listener = []
-            this.timer = null
-            this.observe()
-        }
-        clearTimer() {
-            if (this.timer) {
-                clearTimeout(this.timer)
-                this.timer = null
-            }
-        }
-        destroy() {
-            this.listener.length = 0
-        }
-        observe() {
-            this.timer = window.setTimeout(() => {
-                const entries = performance.getEntriesByType('resource').filter(item => this.isMatchType(item))
-                const len = entries.length
-                if (len <= this.len) {
-                    performance.clearResourceTimings()
-                    this.clearTimer()
-                    this.resolved = true
-                    if (this.listener.length) {
-                        this.listener.forEach(run => run())
-                    }
-                    return
-                }
-                this.len = len
-                this.observe()
-            }, this.interval)
-        }
-        isMatchType(entry) {
-            switch (entry.initiatorType) {
-                case 'link':
-                case 'img':
-                case 'css':
-                case 'iframe':
-                    return true
-            }
-        }
-        ready(fn) {
-            if (this.resolved) {
-                return fn()
-            }
-            this.listener.push(fn)
         }
     }
 
@@ -10054,12 +9819,12 @@ var TimeCat = (function (exports) {
         if (name === 'background' || name === 'src') {
             if (value.startsWith('data:'));
             else {
-                value = proxyResource(completeAttrHref(String(value), node))
+                value = completeAttrHref(String(value), node)
             }
         }
         if (name === 'srcset') {
             const srcArray = value.split(',')
-            value = srcArray.map(src => proxyResource(completeAttrHref(src.trim(), node))).toString()
+            value = srcArray.map(src => completeAttrHref(src.trim(), node)).toString()
         }
         if (value.startsWith('/')) {
             value = completeAttrHref(value, node)
@@ -10128,7 +9893,7 @@ var TimeCat = (function (exports) {
         }
     }
     function getAttributes(vNode) {
-        const attrs = { ...vNode.attrs }
+        const attrs = Object.assign({}, vNode.attrs)
         if (vNode.tag === 'iframe') {
             attrs['disabled-src'] = attrs.src
             delete attrs.src
@@ -10482,10 +10247,7 @@ var TimeCat = (function (exports) {
                             target.oldValue = value
                         }
                         data = {
-                            type:
-                                eventType === 'input'
-                                    ? exports.FormElementEvent.INPUT
-                                    : exports.FormElementEvent.CHANGE,
+                            type: eventType === 'input' ? FormElementEvent.INPUT : FormElementEvent.CHANGE,
                             id: this.getNodeId(e.target),
                             key,
                             value: !patches.length ? newValue : value,
@@ -10494,13 +10256,13 @@ var TimeCat = (function (exports) {
                         break
                     case 'focus':
                         data = {
-                            type: exports.FormElementEvent.FOCUS,
+                            type: FormElementEvent.FOCUS,
                             id: this.getNodeId(e.target)
                         }
                         break
                     case 'blur':
                         data = {
-                            type: exports.FormElementEvent.BLUR,
+                            type: FormElementEvent.BLUR,
                             id: this.getNodeId(e.target)
                         }
                         break
@@ -10541,7 +10303,7 @@ var TimeCat = (function (exports) {
             handles.concat([]).forEach(handle => handle())
             function handleEvent(key, value) {
                 const data = {
-                    type: exports.FormElementEvent.PROP,
+                    type: FormElementEvent.PROP,
                     id: self.getNodeId(this),
                     key,
                     value
@@ -10566,8 +10328,16 @@ var TimeCat = (function (exports) {
                 }
             }
             this.locationHandle = e => {
+                var _a, _b
                 const contextNodeId = this.getContextNodeId(e)
-                const [, , path] = e.arguments || [, , this.context?.location?.pathname]
+                const [, , path] = e.arguments || [
+                    ,
+                    ,
+                    (_b = (_a = this.context) === null || _a === void 0 ? void 0 : _a.location) === null ||
+                    _b === void 0
+                        ? void 0
+                        : _b.pathname
+                ]
                 const { href, hash } = this.context.location
                 this.emitData(exports.RecordType.LOCATION, {
                     contextNodeId,
@@ -10629,7 +10399,7 @@ var TimeCat = (function (exports) {
         sendMoveData(position) {
             const { x, y, id } = position
             this.emitData(exports.RecordType.MOUSE, {
-                type: exports.MouseEventType.MOVE,
+                type: MouseEventType.MOVE,
                 id,
                 x,
                 y
@@ -10658,10 +10428,10 @@ var TimeCat = (function (exports) {
             const evt = e => {
                 const offsetPosition = this.getOffsetPosition(e, this.context)
                 if (offsetPosition) {
-                    this.emitData(exports.RecordType.MOUSE, {
-                        type: exports.MouseEventType.CLICK,
-                        ...offsetPosition
-                    })
+                    this.emitData(
+                        exports.RecordType.MOUSE,
+                        Object.assign({ type: MouseEventType.CLICK }, offsetPosition)
+                    )
                 }
             }
             const name = 'click'
@@ -10672,6 +10442,7 @@ var TimeCat = (function (exports) {
             this.context.document.addEventListener(name, listenerHandle)
         }
         getOffsetPosition(event, context) {
+            var _a
             const { mode } = context.G_RECORD_OPTIONS
             const { view, target, x, y, offsetX, offsetY } = event
             if (view === context) {
@@ -10712,7 +10483,10 @@ var TimeCat = (function (exports) {
                           x: offsetX,
                           y: offsetY
                       }
-                const frameElement = doc?.defaultView?.frameElement
+                const frameElement =
+                    (_a = doc === null || doc === void 0 ? void 0 : doc.defaultView) === null || _a === void 0
+                        ? void 0
+                        : _a.frameElement
                 if (frameElement && mode === 'default') {
                     position.y += frameElement.offsetTop
                     position.x += frameElement.offsetLeft
@@ -10845,9 +10619,10 @@ var TimeCat = (function (exports) {
                             : null
                     },
                     set: function (value) {
+                        var _a
                         const id = self.getNodeId(this.canvas)
                         self.aggregateDataEmitter(id, name, value)
-                        return original.set?.apply(this, arguments)
+                        return (_a = original.set) === null || _a === void 0 ? void 0 : _a.apply(this, arguments)
                     }
                 })
                 this.uninstall(() => {
@@ -10930,7 +10705,7 @@ var TimeCat = (function (exports) {
             return this.opts
         }
         setOptions(opts = AudioRecorder.defaultRecordOptions) {
-            this.opts = { ...this.opts, ...opts }
+            this.opts = Object.assign(Object.assign({}, this.opts), opts)
         }
         beginRecord() {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
@@ -10956,27 +10731,31 @@ var TimeCat = (function (exports) {
             }
             this.mediaNode.connect(this.processNode)
         }
-        async initRecorder() {
-            return new Promise((resolve, reject) => {
-                window.navigator.mediaDevices
-                    .getUserMedia({
-                        audio: {
-                            sampleRate: this.opts.sampleRate,
-                            channelCount: this.opts.channelCount,
-                            echoCancellation: true,
-                            autoGainControl: true,
-                            noiseSuppression: true,
-                            latency: 0
-                        }
-                    })
-                    .then(mediaStream => resolve(mediaStream))
-                    .catch(err => reject(err))
+        initRecorder() {
+            return __awaiter(this, void 0, void 0, function* () {
+                return new Promise((resolve, reject) => {
+                    window.navigator.mediaDevices
+                        .getUserMedia({
+                            audio: {
+                                sampleRate: this.opts.sampleRate,
+                                channelCount: this.opts.channelCount,
+                                echoCancellation: true,
+                                autoGainControl: true,
+                                noiseSuppression: true,
+                                latency: 0
+                            }
+                        })
+                        .then(mediaStream => resolve(mediaStream))
+                        .catch(err => reject(err))
+                })
             })
         }
-        async start(opts = AudioRecorder.defaultRecordOptions) {
-            this.setOptions(opts)
-            this.mediaStream = await this.initRecorder()
-            this.mediaStream && this.beginRecord()
+        start(opts = AudioRecorder.defaultRecordOptions) {
+            return __awaiter(this, void 0, void 0, function* () {
+                this.setOptions(opts)
+                this.mediaStream = yield this.initRecorder()
+                this.mediaStream && this.beginRecord()
+            })
         }
         stop() {
             this.mediaStream && this.mediaStream.getAudioTracks()[0].stop()
@@ -11030,10 +10809,7 @@ var TimeCat = (function (exports) {
             this.emitData(exports.RecordType.SNAPSHOT, snapshotData)
         }
         DOMSnapshotData(context) {
-            return {
-                vNode: createElement(context.document.documentElement),
-                ...this.getInitInfo(context)
-            }
+            return Object.assign({ vNode: createElement(context.document.documentElement) }, this.getInitInfo(context))
         }
         getInitInfo(context) {
             const { name, publicId, systemId } = context.document.doctype || {}
@@ -11060,7 +10836,7 @@ var TimeCat = (function (exports) {
 
     var name = 'timecat'
     var author = 'oct16'
-    var version = '1.2.0-alpha.8'
+    var version = '1.2.0-alpha.11'
     var description = 'TimeCat Web Recorder'
     var keywords = [
         'recorder',
@@ -11076,18 +10852,19 @@ var TimeCat = (function (exports) {
     var license = 'GPL-3.0-or-later'
     var workspaces = ['packages/*']
     var scripts = {
-        dev: 'node scripts/dev.js',
-        build: 'node scripts/build.js',
-        release: 'node scripts/release.js',
-        live: 'node scripts/live.js',
+        dev: '$npm_execpath --silent run checkyarn && node scripts/dev.js',
+        build: '$npm_execpath --silent run checkyarn && node scripts/build.js',
+        release: '$npm_execpath --silent run checkyarn && node scripts/release.js',
+        preinstall: '$npm_execpath --silent run checkyarn',
+        checkyarn: 'node ./scripts/checkYarn.js',
+        'ls-lint': 'ls-lint',
+        lint: "eslint 'packages/**/*.{js,ts}' --quiet --fix",
         test: 'jest',
+        live: 'node scripts/live.js',
         embed: 'cp packages/timecat/dist/timecat.global.prod.js ../TimeCatChrome/src/assets/',
         gh: 'node scripts/gh.js',
         count:
-            "git ls-files --exclude-standard -- ':!:**/*.[pjs][npv]g' ':!:.eslintrc' ':!: examples/*' ':!:.gitignore' ':!:README.*' ':!:LICENSE' ':!:yarn.lock' | xargs wc -l",
-        'ls-lint': 'ls-lint',
-        lint: "eslint 'packages/**/*.{js,ts}' --quiet --fix",
-        preinstall: 'node ./scripts/checkYarn.js'
+            "git ls-files --exclude-standard -- ':!:**/*.[pjs][npv]g' ':!:.eslintrc' ':!: examples/*' ':!:.gitignore' ':!:README.*' ':!:LICENSE' ':!:yarn.lock' | xargs wc -l"
     }
     var husky = {
         hooks: {
@@ -13299,23 +13076,25 @@ var TimeCat = (function (exports) {
         })
     })
 
-    async function getHeadData() {
-        const fp = await fingerprint2.getPromise({}).then(components => {
-            const values = components.map(component => {
-                return component.value
+    function getHeadData() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const fp = yield fingerprint2.getPromise({}).then(components => {
+                const values = components.map(component => {
+                    return component.value
+                })
+                const murmur = fingerprint2.x64hash128(values.join(''), 31)
+                return murmur
             })
-            const murmur = fingerprint2.x64hash128(values.join(''), 31)
-            return murmur
+            return {
+                href: location.href,
+                relatedId: getRandomCode(),
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                beginTime: getTime().toString(),
+                version: pkg.version,
+                fp
+            }
         })
-        return {
-            href: location.href,
-            relatedId: getRandomCode(),
-            userAgent: navigator.userAgent,
-            platform: navigator.platform,
-            beginTime: getTime().toString(),
-            version: pkg.version,
-            fp
-        }
     }
 
     var global$1 =
@@ -16918,19 +16697,21 @@ var TimeCat = (function (exports) {
         constructor(options) {
             this.plugins = []
             this.hooks = HOOKS
+            this.plugin = (type, cb) => {
+                const name = this.hooks[type].constructor.name
+                const method = /Async/.test(name) ? 'tapAsync' : 'tap'
+                this.hooks[type][method](type, cb)
+            }
             this.initPlugin(options)
         }
         initPlugin(options) {
             const { plugins } = options || {}
             this.plugins.push(...defaultPlugins, ...(plugins || []))
-            this.plugins.forEach(plugin => {
-                plugin.apply(this)
-            })
         }
-        plugin(type, cb) {
-            const name = this.hooks[type].constructor.name
-            const method = /Async/.test(name) ? 'tapAsync' : 'tap'
-            this.hooks[type][method](type, cb)
+        pluginsOnload() {
+            this.plugins.forEach(plugin => {
+                plugin.apply.call(plugin, this)
+            })
         }
         use(plugin) {
             this.plugins.push(plugin)
@@ -16944,32 +16725,36 @@ var TimeCat = (function (exports) {
             this.destroyStore = new Set()
             this.listenStore = new Set()
             this.watchesReadyPromise = new Promise(resolve => (this.watcherResolve = resolve))
-            const opts = { ...Recorder.defaultRecordOpts, ...options }
+            const opts = Object.assign(Object.assign({}, Recorder.defaultRecordOpts), options)
             this.watchers = this.getWatchers(opts)
-            if (opts && opts.uploadUrl) {
-                new Transmitter(opts.uploadUrl)
-            }
             this.init(opts)
         }
-        async init(options) {
-            const db = await getDBOperator
-            this.db = db
-            this.hooks.beforeRun.call(this)
-            this.record(options)
-            this.hooks.run.call(this)
-            this.listenVisibleChange(options)
+        init(options) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const db = yield getDBOperator
+                this.db = db
+                this.pluginsOnload()
+                this.hooks.beforeRun.call(this)
+                this.record(options)
+                this.hooks.run.call(this)
+                this.listenVisibleChange(options)
+            })
         }
         onData(cb) {
             this.onDataCallback = cb
         }
-        async destroy() {
-            await this.cancelListen()
-            this.destroyStore.forEach(un => un())
+        destroy() {
+            return __awaiter(this, void 0, void 0, function* () {
+                yield this.cancelListen()
+                this.destroyStore.forEach(un => un())
+            })
         }
-        async cancelListen() {
-            await this.watchesReadyPromise
-            this.listenStore.forEach(un => un())
-            nodeStore.reset()
+        cancelListen() {
+            return __awaiter(this, void 0, void 0, function* () {
+                yield this.watchesReadyPromise
+                this.listenStore.forEach(un => un())
+                nodeStore.reset()
+            })
         }
         getWatchers(options) {
             const watchers$1 = [Snapshot, ...Object.values(watchers)]
@@ -16979,108 +16764,116 @@ var TimeCat = (function (exports) {
             return watchers$1
         }
         record(options) {
-            const opts = { ...Recorder.defaultRecordOpts, ...options }
+            const opts = Object.assign(Object.assign({}, Recorder.defaultRecordOpts), options)
             this.startRecord((opts.context.G_RECORD_OPTIONS = opts))
         }
-        async startRecord(options) {
-            let activeWatchers = this.watchers
-            if (options.context === window) {
-                if (!options.skip) {
-                    this.db.clear()
-                }
-            } else {
-                activeWatchers = [
-                    Snapshot,
-                    watchers.MouseWatcher,
-                    watchers.DOMWatcher,
-                    watchers.FormElementWatcher,
-                    watchers.ScrollWatcher
-                ]
-            }
-            const onEmit = options => {
-                const { write } = options
-                return data => {
-                    if (!data) {
-                        return
+        startRecord(options) {
+            return __awaiter(this, void 0, void 0, function* () {
+                let activeWatchers = this.watchers
+                if (options.context === window) {
+                    if (!options.skip) {
+                        this.db.clear()
                     }
-                    this.hooks.emit.call(data)
-                    this.onDataCallback && this.onDataCallback(data)
-                    if (write) {
-                        this.db.addRecord(data)
+                } else {
+                    activeWatchers = [
+                        Snapshot,
+                        watchers.MouseWatcher,
+                        watchers.DOMWatcher,
+                        watchers.FormElementWatcher,
+                        watchers.ScrollWatcher
+                    ]
+                }
+                const onEmit = options => {
+                    const { write } = options
+                    return data => {
+                        if (!data) {
+                            return
+                        }
+                        this.hooks.emit.call(data)
+                        this.onDataCallback && this.onDataCallback(data)
+                        if (write) {
+                            this.db.addRecord(data)
+                        }
                     }
                 }
-            }
-            const emit = onEmit(options)
-            const headData = await getHeadData()
-            const relatedId = headData.relatedId
-            if (options.context) {
-                options.context.G_RECORD_RELATED_ID = relatedId
-            }
-            emit({
-                type: exports.RecordType.HEAD,
-                data: headData,
-                relatedId: relatedId,
-                time: getRadix64TimeStr()
-            })
-            activeWatchers.forEach(watcher => {
-                new watcher({
-                    context: options && options.context,
-                    listenStore: this.listenStore,
+                const emit = onEmit(options)
+                const headData = yield getHeadData()
+                const relatedId = headData.relatedId
+                if (options.context) {
+                    options.context.G_RECORD_RELATED_ID = relatedId
+                }
+                emit({
+                    type: exports.RecordType.HEAD,
+                    data: headData,
                     relatedId: relatedId,
-                    emit
+                    time: getRadix64TimeStr()
                 })
-            })
-            this.watcherResolve()
-            await this.recordFrames()
-        }
-        async waitingFramesLoaded() {
-            const frames = window.frames
-            const validFrames = Array.from(frames)
-                .filter(frame => {
-                    try {
-                        const frameElement = frame.frameElement
-                        return frameElement.getAttribute('src')
-                    } catch (e) {
-                        logError(e)
-                        return false
-                    }
-                })
-                .map(frame => {
-                    const frameDocument = frame
-                    return new Promise(resolve => {
-                        frameDocument.addEventListener('load', () => {
-                            resolve(frame)
-                        })
+                activeWatchers.forEach(watcher => {
+                    new watcher({
+                        context: options && options.context,
+                        listenStore: this.listenStore,
+                        relatedId: relatedId,
+                        emit
                     })
                 })
-            if (!validFrames.length) {
-                return Promise.resolve([])
-            }
-            return Promise.all(validFrames)
+                this.watcherResolve()
+                yield this.recordFrames()
+            })
         }
-        async recordFrames() {
-            const frames = await this.waitingFramesLoaded()
-            frames.forEach(frameWindow => this.record({ context: frameWindow }))
+        waitingFramesLoaded() {
+            return __awaiter(this, void 0, void 0, function* () {
+                const frames = window.frames
+                const validFrames = Array.from(frames)
+                    .filter(frame => {
+                        try {
+                            const frameElement = frame.frameElement
+                            return frameElement.getAttribute('src')
+                        } catch (e) {
+                            logError(e)
+                            return false
+                        }
+                    })
+                    .map(frame => {
+                        const frameDocument = frame
+                        return new Promise(resolve => {
+                            frameDocument.addEventListener('load', () => {
+                                resolve(frame)
+                            })
+                        })
+                    })
+                if (!validFrames.length) {
+                    return Promise.resolve([])
+                }
+                return Promise.all(validFrames)
+            })
+        }
+        recordFrames() {
+            return __awaiter(this, void 0, void 0, function* () {
+                const frames = yield this.waitingFramesLoaded()
+                frames.forEach(frameWindow => this.record({ context: frameWindow }))
+            })
         }
         listenVisibleChange(options) {
             if (typeof document.hidden !== 'undefined') {
                 const hidden = 'hidden'
                 const visibilityChange = 'visibilitychange'
-                async function handleVisibilityChange() {
-                    if (document[hidden]) {
-                        const data = {
-                            type: exports.RecordType.TERMINATE,
-                            data: null,
-                            relatedId: options.context.G_RECORD_RELATED_ID,
-                            time: getRadix64TimeStr()
+                function handleVisibilityChange() {
+                    return __awaiter(this, void 0, void 0, function* () {
+                        if (document[hidden]) {
+                            const data = {
+                                type: exports.RecordType.TERMINATE,
+                                data: null,
+                                relatedId: options.context.G_RECORD_RELATED_ID,
+                                time: getRadix64TimeStr()
+                            }
+                            this.db.addRecord(data)
+                            this.onDataCallback && this.onDataCallback(data)
+                            this.cancelListen()
+                            this.hooks.end.call()
+                        } else {
+                            this.record(Object.assign(Object.assign({}, options), { skip: true }))
                         }
-                        this.db.addRecord(data)
-                        this.onDataCallback && this.onDataCallback(data)
-                        this.cancelListen()
-                        this.hooks.end.call()
-                    } else {
-                        this.record({ ...options, skip: true })
-                    }
+                    })
                 }
                 const handle = handleVisibilityChange.bind(this)
                 document.addEventListener(visibilityChange, handle, false)
@@ -17135,221 +16928,229 @@ var TimeCat = (function (exports) {
             return true
         }
     }
-    async function updateDom(Record) {
-        const { type, data } = Record
-        switch (type) {
-            case exports.RecordType.SNAPSHOT: {
-                const snapshotData = data
-                const { frameId } = snapshotData
-                if (frameId) {
-                    const iframeNode = nodeStore.getNode(frameId)
-                    if (iframeNode) {
-                        const contentDocument = iframeNode.contentDocument
-                        createIframeDOM(contentDocument, snapshotData)
-                        injectIframeContent(contentDocument, snapshotData)
+    function updateDom(Record) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { type, data } = Record
+            switch (type) {
+                case exports.RecordType.SNAPSHOT: {
+                    const snapshotData = data
+                    const { frameId } = snapshotData
+                    if (frameId) {
+                        const iframeNode = nodeStore.getNode(frameId)
+                        if (iframeNode) {
+                            const contentDocument = iframeNode.contentDocument
+                            createIframeDOM(contentDocument, snapshotData)
+                            injectIframeContent(contentDocument, snapshotData)
+                        }
                     }
+                    break
                 }
-                break
-            }
-            case exports.RecordType.SCROLL: {
-                const { top, left, id } = data
-                const target = id ? nodeStore.getNode(id) : this.c.sandBoxDoc.documentElement
-                if (!target) {
-                    return
-                }
-                const curTop = target.scrollTop
-                const behavior =
-                    Math.abs(top - curTop) > window.G_REPLAY_DATA.snapshot.data.height * 3 ? 'auto' : 'smooth'
-                target.scroll({
-                    top,
-                    left,
-                    behavior
-                })
-                break
-            }
-            case exports.RecordType.WINDOW: {
-                const { width, height, id } = data
-                let target
-                if (id) {
-                    target = nodeStore.getNode(id)
-                    target.style.width = width + 'px'
-                    target.style.height = height + 'px'
-                } else {
-                    target = this.c.sandBoxDoc.body
-                    this.c.resize(width, height)
-                }
-                break
-            }
-            case exports.RecordType.MOUSE: {
-                const { x, y, id, type } = data
-                let left = 0,
-                    top = 0
-                if (id) {
-                    const node = nodeStore.getNode(id)
-                    let rect = {}
-                    if (node && node.getBoundingClientRect) {
-                        rect = node.getBoundingClientRect()
+                case exports.RecordType.SCROLL: {
+                    const { top, left, id } = data
+                    const target = id ? nodeStore.getNode(id) : this.c.sandBoxDoc.documentElement
+                    if (!target) {
+                        return
                     }
-                    const { left: nodeLeft, top: nodeTop } = rect
-                    left = nodeLeft
-                    top = nodeTop
+                    const curTop = target.scrollTop
+                    const behavior =
+                        Math.abs(top - curTop) > window.G_REPLAY_DATA.snapshot.data.height * 3 ? 'auto' : 'smooth'
+                    target.scroll({
+                        top,
+                        left,
+                        behavior
+                    })
+                    break
                 }
-                if (type === exports.MouseEventType.MOVE) {
-                    this.pointer.move(x + left, y + top)
-                } else if (type === exports.MouseEventType.CLICK) {
-                    this.pointer.click(x + left, y + top)
+                case exports.RecordType.WINDOW: {
+                    const { width, height, id } = data
+                    let target
+                    if (id) {
+                        target = nodeStore.getNode(id)
+                        target.style.width = width + 'px'
+                        target.style.height = height + 'px'
+                    } else {
+                        target = this.c.sandBoxDoc.body
+                        this.c.resize(width, height)
+                    }
+                    break
                 }
-                break
-            }
-            case exports.RecordType.DOM: {
-                await actionDelay()
-                const { addedNodes, movedNodes, removedNodes, attrs, texts } = data
-                removedNodes &&
-                    removedNodes.forEach(data => {
-                        const { parentId, id } = data
-                        const parentNode = nodeStore.getNode(parentId)
+                case exports.RecordType.MOUSE: {
+                    const { x, y, id, type } = data
+                    let left = 0,
+                        top = 0
+                    if (id) {
                         const node = nodeStore.getNode(id)
-                        if (node && parentNode && parentNode.contains(node)) {
-                            parentNode.removeChild(node)
+                        let rect = {}
+                        if (node && node.getBoundingClientRect) {
+                            rect = node.getBoundingClientRect()
                         }
-                    })
-                const orderSet = new Set()
-                const movedList = (movedNodes && movedNodes.slice()) || []
-                movedList.forEach(data => {
-                    if (data.nextId) {
-                        if (movedList.some(a => a.id === data.nextId)) {
-                            orderSet.add(data.nextId)
-                        }
+                        const { left: nodeLeft, top: nodeTop } = rect
+                        left = nodeLeft
+                        top = nodeTop
                     }
-                })
-                const addedList = movedList
-                    .map(item => {
-                        const { id, parentId, nextId } = item
-                        return {
-                            node: id,
-                            parentId,
-                            nextId
+                    if (type === MouseEventType.MOVE) {
+                        this.pointer.move(x + left, y + top)
+                    } else if (type === MouseEventType.CLICK) {
+                        this.pointer.click(x + left, y + top)
+                    }
+                    break
+                }
+                case exports.RecordType.DOM: {
+                    yield actionDelay()
+                    const { addedNodes, movedNodes, removedNodes, attrs, texts } = data
+                    removedNodes &&
+                        removedNodes.forEach(data => {
+                            const { parentId, id } = data
+                            const parentNode = nodeStore.getNode(parentId)
+                            const node = nodeStore.getNode(id)
+                            if (node && parentNode && parentNode.contains(node)) {
+                                parentNode.removeChild(node)
+                            }
+                        })
+                    const orderSet = new Set()
+                    const movedList = (movedNodes && movedNodes.slice()) || []
+                    movedList.forEach(data => {
+                        if (data.nextId) {
+                            if (movedList.some(a => a.id === data.nextId)) {
+                                orderSet.add(data.nextId)
+                            }
                         }
                     })
-                    .concat((addedNodes && addedNodes.slice()) || [])
-                if (addedList) {
-                    const n = addedList.length
-                    const maxRevertCount = n > 0 ? (n * n + n) / 2 : 0
-                    let revertCount = 0
-                    while (addedList.length) {
-                        const addData = addedList.shift()
-                        if (addData) {
-                            if (insertOrMoveNode(addData, orderSet)) {
-                                if (revertCount++ < maxRevertCount) {
-                                    addedList.push(addData)
+                    const addedList = movedList
+                        .map(item => {
+                            const { id, parentId, nextId } = item
+                            return {
+                                node: id,
+                                parentId,
+                                nextId
+                            }
+                        })
+                        .concat((addedNodes && addedNodes.slice()) || [])
+                    if (addedList) {
+                        const n = addedList.length
+                        const maxRevertCount = n > 0 ? (n * n + n) / 2 : 0
+                        let revertCount = 0
+                        while (addedList.length) {
+                            const addData = addedList.shift()
+                            if (addData) {
+                                if (insertOrMoveNode(addData, orderSet)) {
+                                    if (revertCount++ < maxRevertCount) {
+                                        addedList.push(addData)
+                                    }
                                 }
                             }
                         }
                     }
+                    attrs &&
+                        attrs.forEach(attr => {
+                            const { id, key, value } = attr
+                            const node = nodeStore.getNode(id)
+                            if (node) {
+                                setAttribute(node, key, value)
+                            }
+                        })
+                    texts &&
+                        texts.forEach(text => {
+                            const { id, value, parentId } = text
+                            const parentNode = nodeStore.getNode(parentId)
+                            const node = nodeStore.getNode(id)
+                            if (parentNode && node) {
+                                if (isExistingNode(node)) {
+                                    node.textContent = value
+                                    return
+                                }
+                                parentNode.innerText = value
+                            }
+                        })
+                    break
                 }
-                attrs &&
-                    attrs.forEach(attr => {
-                        const { id, key, value } = attr
-                        const node = nodeStore.getNode(id)
-                        if (node) {
-                            setAttribute(node, key, value)
-                        }
-                    })
-                texts &&
-                    texts.forEach(text => {
-                        const { id, value, parentId } = text
-                        const parentNode = nodeStore.getNode(parentId)
-                        const node = nodeStore.getNode(id)
-                        if (parentNode && node) {
-                            if (isExistingNode(node)) {
-                                node.textContent = value
+                case exports.RecordType.FORM_EL: {
+                    yield actionDelay()
+                    const { id, key, type: formType, value, patches } = data
+                    const node = nodeStore.getNode(id)
+                    const { mode } = window.G_REPLAY_OPTIONS
+                    if (node) {
+                        if (formType === FormElementEvent.INPUT || formType === FormElementEvent.CHANGE) {
+                            if (patches && patches.length) {
+                                const newValue = revertStrByPatches(node.value, patches)
+                                node.value = newValue
+                            } else if (key) {
+                                node[key] = value
+                            }
+                        } else if (formType === FormElementEvent.FOCUS) {
+                            if (mode === 'live') {
                                 return
                             }
-                            parentNode.innerText = value
-                        }
-                    })
-                break
-            }
-            case exports.RecordType.FORM_EL: {
-                await actionDelay()
-                const { id, key, type: formType, value, patches } = data
-                const node = nodeStore.getNode(id)
-                const { mode } = window.G_REPLAY_OPTIONS
-                if (node) {
-                    if (formType === exports.FormElementEvent.INPUT || formType === exports.FormElementEvent.CHANGE) {
-                        if (patches && patches.length) {
-                            const newValue = revertStrByPatches(node.value, patches)
-                            node.value = newValue
-                        } else if (key) {
-                            node[key] = value
-                        }
-                    } else if (formType === exports.FormElementEvent.FOCUS) {
-                        if (mode === 'live') {
-                            return
-                        }
-                        node.focus && node.focus()
-                    } else if (formType === exports.FormElementEvent.BLUR) {
-                        node.blur && node.blur()
-                    } else if (formType === exports.FormElementEvent.PROP) {
-                        if (key) {
-                            node[key] = value
-                        }
-                    }
-                }
-                break
-            }
-            case exports.RecordType.LOCATION: {
-                const { path, hash, href, contextNodeId } = data
-                const contextNode = nodeStore.getNode(contextNodeId)
-                if (contextNode) {
-                    const context = contextNode.ownerDocument.defaultView
-                    context.G_REPLAY_LOCATION = { ...context.G_REPLAY_LOCATION, ...{ path, hash, href } }
-                }
-                break
-            }
-            case exports.RecordType.CANVAS: {
-                await actionDelay()
-                const { src, id, strokes } = data
-                const target = nodeStore.getNode(id)
-                if (!target) {
-                    return
-                }
-                const ctx = target.getContext('2d')
-                if (src) {
-                    const image = new Image()
-                    image.src = src
-                    image.onload = function () {
-                        ctx.drawImage(this, 0, 0)
-                    }
-                } else {
-                    async function createChain() {
-                        function splitStrokes(strokesArray) {
-                            const result = []
-                            strokesArray.forEach(strokes => {
-                                const len = strokes.length
-                                const pivot = Math.floor(len / 2)
-                                result.push(...[strokes.splice(0, pivot), strokes])
-                            })
-                            return result
-                        }
-                        for (const strokesArray of splitStrokes(splitStrokes([strokes]))) {
-                            for (const stroke of strokesArray) {
-                                const { name, args } = stroke
-                                if (Array.isArray(args)) {
-                                    if (name === 'drawImage') {
-                                        args[0] = nodeStore.getNode(args[0])
-                                    }
-                                    ctx[name].apply(ctx, args)
-                                } else {
-                                    ctx[name] = args
-                                }
+                            node.focus && node.focus()
+                        } else if (formType === FormElementEvent.BLUR) {
+                            node.blur && node.blur()
+                        } else if (formType === FormElementEvent.PROP) {
+                            if (key) {
+                                node[key] = value
                             }
                         }
                     }
-                    createChain()
+                    break
+                }
+                case exports.RecordType.LOCATION: {
+                    const { path, hash, href, contextNodeId } = data
+                    const contextNode = nodeStore.getNode(contextNodeId)
+                    if (contextNode) {
+                        const context = contextNode.ownerDocument.defaultView
+                        context.G_REPLAY_LOCATION = Object.assign(Object.assign({}, context.G_REPLAY_LOCATION), {
+                            path,
+                            hash,
+                            href
+                        })
+                    }
+                    break
+                }
+                case exports.RecordType.CANVAS: {
+                    yield actionDelay()
+                    const { src, id, strokes } = data
+                    const target = nodeStore.getNode(id)
+                    if (!target) {
+                        return
+                    }
+                    const ctx = target.getContext('2d')
+                    if (src) {
+                        const image = new Image()
+                        image.src = src
+                        image.onload = function () {
+                            ctx.drawImage(this, 0, 0)
+                        }
+                    } else {
+                        function createChain() {
+                            return __awaiter(this, void 0, void 0, function* () {
+                                function splitStrokes(strokesArray) {
+                                    const result = []
+                                    strokesArray.forEach(strokes => {
+                                        const len = strokes.length
+                                        const pivot = Math.floor(len / 2)
+                                        result.push(...[strokes.splice(0, pivot), strokes])
+                                    })
+                                    return result
+                                }
+                                for (const strokesArray of splitStrokes(splitStrokes([strokes]))) {
+                                    for (const stroke of strokesArray) {
+                                        const { name, args } = stroke
+                                        if (Array.isArray(args)) {
+                                            if (name === 'drawImage') {
+                                                args[0] = nodeStore.getNode(args[0])
+                                            }
+                                            ctx[name].apply(ctx, args)
+                                        } else {
+                                            ctx[name] = args
+                                        }
+                                    }
+                                }
+                            })
+                        }
+                        createChain()
+                    }
                 }
             }
-        }
+        })
     }
     function showStartMask() {
         const startPage = document.querySelector('#cat-start-page')
@@ -17362,16 +17163,23 @@ var TimeCat = (function (exports) {
         return btn
     }
     function removeStartPage() {
+        var _a
         const startPage = document.querySelector('#cat-start-page')
-        startPage?.parentElement?.removeChild(startPage)
+        ;(_a = startPage === null || startPage === void 0 ? void 0 : startPage.parentElement) === null || _a === void 0
+            ? void 0
+            : _a.removeChild(startPage)
     }
-    async function waitStart() {
-        const btn = showStartBtn()
-        return new Promise(r => {
-            btn.addEventListener('click', async () => {
-                btn.classList.remove('show')
-                await delay(500)
-                r()
+    function waitStart() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const btn = showStartBtn()
+            return new Promise(r => {
+                btn.addEventListener('click', () =>
+                    __awaiter(this, void 0, void 0, function* () {
+                        btn.classList.remove('show')
+                        yield delay(500)
+                        r()
+                    })
+                )
             })
         })
     }
@@ -17398,8 +17206,10 @@ var TimeCat = (function (exports) {
             contentDocument.replaceChild(content, documentElement)
         }
     }
-    async function actionDelay() {
-        return delay(200)
+    function actionDelay() {
+        return __awaiter(this, void 0, void 0, function* () {
+            return delay(200)
+        })
     }
 
     var smoothscroll = createCommonjsModule(function (module, exports) {
@@ -17869,7 +17679,7 @@ var TimeCat = (function (exports) {
         }
         createContainer(id, html) {
             const parser = new DOMParser()
-            const el = parser.parseFromString(filteringTemplate(html), 'text/html').body.firstChild
+            const el = parser.parseFromString(html, 'text/html').body.firstChild
             el.id = id
             el.style.width = this.getSnapshotRecord().width + 'px'
             el.style.height = this.getSnapshotRecord().height + 'px'
@@ -17939,6 +17749,280 @@ var TimeCat = (function (exports) {
             return style
         }
     }
+
+    class FMP {
+        constructor() {
+            this.interval = 1000
+            this.len = 0
+            this.resolved = false
+            this.listener = []
+            this.timer = null
+            this.observe()
+        }
+        clearTimer() {
+            if (this.timer) {
+                clearTimeout(this.timer)
+                this.timer = null
+            }
+        }
+        destroy() {
+            this.listener.length = 0
+        }
+        observe() {
+            this.timer = window.setTimeout(() => {
+                const entries = performance.getEntriesByType('resource').filter(item => this.isMatchType(item))
+                const len = entries.length
+                if (len <= this.len) {
+                    performance.clearResourceTimings()
+                    this.clearTimer()
+                    this.resolved = true
+                    if (this.listener.length) {
+                        this.listener.forEach(run => run())
+                    }
+                    return
+                }
+                this.len = len
+                this.observe()
+            }, this.interval)
+        }
+        isMatchType(entry) {
+            switch (entry.initiatorType) {
+                case 'link':
+                case 'img':
+                case 'css':
+                case 'iframe':
+                    return true
+            }
+        }
+        ready(fn) {
+            if (this.resolved) {
+                return fn()
+            }
+            this.listener.push(fn)
+        }
+    }
+
+    class Observer {
+        constructor() {
+            this.id = 1
+            this.listenersMap = new Map()
+        }
+        on(key, fn) {
+            const map = this.getListenersByKey(key)
+            map.set(++this.id, fn)
+            return this.id
+        }
+        emit(key, ...args) {
+            this.getListenersByKey(key).forEach(fn => {
+                fn(...args)
+            })
+        }
+        once(key, fn) {
+            const onceFunc = (...args) => {
+                fn(...args)
+                this.off(key, id)
+            }
+            const id = this.on(key, onceFunc)
+            return id
+        }
+        flush(key) {
+            this.getListenersByKey(key).clear()
+        }
+        destroy() {
+            this.listenersMap.clear()
+        }
+        off(key, id) {
+            const map = this.getListenersByKey(key)
+            map.delete(id)
+        }
+        getListenersByKey(key) {
+            const map = this.listenersMap.get(key) || new Map()
+            this.listenersMap.set(key, map)
+            return map
+        }
+    }
+    const observer = new Observer()
+
+    function objectEquals(x, y) {
+        if (x === null || x === undefined || y === null || y === undefined) {
+            return x === y
+        }
+        if (x.constructor !== y.constructor) {
+            return false
+        }
+        if (x instanceof Function) {
+            return x === y
+        }
+        if (x instanceof RegExp) {
+            return x === y
+        }
+        if (x === y || x.valueOf() === y.valueOf()) {
+            return true
+        }
+        if (Array.isArray(x) && x.length !== y.length) {
+            return false
+        }
+        if (x instanceof Date) {
+            return false
+        }
+        if (!(x instanceof Object)) {
+            return false
+        }
+        if (!(y instanceof Object)) {
+            return false
+        }
+        const p = Object.keys(x)
+        return (
+            Object.keys(y).every(function (i) {
+                return p.indexOf(i) !== -1
+            }) &&
+            p.every(function (i) {
+                return objectEquals(x[i], y[i])
+            })
+        )
+    }
+
+    const initState = {
+        speed: 0
+    }
+    var PlayerTypes
+    ;(function (PlayerTypes) {
+        PlayerTypes['RESET'] = 'RESET'
+        PlayerTypes['SPEED'] = 'SPEED'
+    })(PlayerTypes || (PlayerTypes = {}))
+    function PlayerReducer(state, action) {
+        if (!state) {
+            state = initState
+        }
+        if (!action) {
+            return state
+        }
+        const { type, data } = action
+        switch (type) {
+            case PlayerTypes.RESET:
+                return initState
+            case PlayerTypes.SPEED:
+                return Object.assign(Object.assign({}, state), data)
+            default:
+                return state
+        }
+    }
+
+    const initState$1 = {
+        frames: 0,
+        startTime: 0,
+        endTime: 0
+    }
+    var ProgressTypes
+    ;(function (ProgressTypes) {
+        ProgressTypes['RESET'] = 'RESET'
+        ProgressTypes['PROGRESS'] = 'PROGRESS'
+    })(ProgressTypes || (ProgressTypes = {}))
+    function progressReducer(state, action) {
+        if (!state) {
+            state = initState$1
+        }
+        if (!action) {
+            return state
+        }
+        const { type, data } = action
+        switch (type) {
+            case ProgressTypes.RESET:
+                return initState$1
+            case ProgressTypes.PROGRESS:
+                return Object.assign(Object.assign({}, state), data)
+            default:
+                return state
+        }
+    }
+
+    function createStore(reducer, initState = {}) {
+        let state = initState
+        let topics = {
+            all: []
+        }
+        function unsubscribe() {
+            state = reducer(state, { type: 'RESET', data: {} })
+            topics = { all: [] }
+        }
+        function subscribe(...args) {
+            let type = 'all'
+            let listener
+            if (typeof args[0] === 'string') {
+                type = args[0]
+                listener = args[1]
+            } else {
+                listener = args[0]
+            }
+            if (!topics[type]) {
+                topics[type] = []
+            }
+            topics[type].push(listener)
+        }
+        function dispatch(action) {
+            const oldState = state
+            state = reducer(state, action)
+            if (!action) {
+                if (topics['all']) {
+                    topics['all'].forEach(listener => listener(state))
+                }
+                return
+            }
+            const topicName = getTypeInTopics(action.type)
+            if (topicName && topics[topicName]) {
+                return topics[topicName].forEach(listener => {
+                    if (!objectEquals(state[topicName], oldState[topicName])) {
+                        listener(state[topicName])
+                    }
+                })
+            }
+        }
+        function getState(name) {
+            const s = state
+            if (name) {
+                return s[name]
+            }
+            return s
+        }
+        function getTypeInTopics(type) {
+            const topics = {
+                player: Object.keys(PlayerTypes),
+                progress: Object.keys(ProgressTypes)
+            }
+            for (const [key, enums] of Object.entries(topics)) {
+                if (enums.includes(type)) {
+                    return key
+                }
+            }
+        }
+        return {
+            unsubscribe,
+            subscribe,
+            dispatch,
+            getState
+        }
+    }
+
+    function combineReducers(reducers) {
+        const reducerKeys = Object.keys(reducers)
+        return function combination(state, action) {
+            const nextState = {}
+            for (let i = 0; i < reducerKeys.length; i++) {
+                const key = reducerKeys[i]
+                const reducer = reducers[key]
+                const previousStateForKey = state[key]
+                const nextStateForKey = reducer(previousStateForKey, action)
+                nextState[key] = nextStateForKey
+            }
+            return nextState
+        }
+    }
+
+    const reducer = combineReducers({
+        player: PlayerReducer,
+        progress: progressReducer
+    })
+    const reduxStore = createStore(reducer)
 
     class KeyboardComponent {
         constructor(container) {
@@ -18016,54 +18100,60 @@ var TimeCat = (function (exports) {
                 speedNodes[index].setAttribute('disabled', '')
             }
         }
-        async export() {
-            const SDKScript = document.getElementById('timecat')
-            const initScript = document.getElementById('timecat-init')
-            const scriptList = []
-            const scripts = document.querySelectorAll('script')
-            function detectSDKSrc() {
-                return Array.from(scripts)
-                    .map(script => script.src)
-                    .find(src => /(timecat)(\.prod)?\.global\.js/.test(src))
-            }
-            function detectSDKContent() {
-                return Array.from(scripts)
-                    .map(script => script.textContent)
-                    .find(content => content?.trim().startsWith('var TimeCat'))
-            }
-            function detectInitScriptContent() {
-                return Array.from(scripts)
-                    .map(script => script.textContent)
-                    .find(content => {
-                        if (content) {
-                            return /new\s(TimeCat\.)?Player/.test(content)
-                        }
-                    })
-            }
-            async function getScriptSource(scriptElement) {
-                if (!scriptElement) {
-                    return
+        export() {
+            return __awaiter(this, void 0, void 0, function* () {
+                const SDKScript = document.getElementById('timecat')
+                const initScript = document.getElementById('timecat-init')
+                const scriptList = []
+                const scripts = document.querySelectorAll('script')
+                function detectSDKSrc() {
+                    return Array.from(scripts)
+                        .map(script => script.src)
+                        .find(src => /(timecat)(\.prod)?\.global\.js/.test(src))
                 }
-                return (
-                    scriptElement.textContent ||
-                    (await getRawScriptContent(scriptElement.src.trim())) ||
-                    scriptElement.src
-                )
-            }
-            const SDKSource = (await getScriptSource(SDKScript)) || detectSDKSrc() || detectSDKContent()
-            scriptList.push({
-                name: 'timecat',
-                src: SDKSource
-            })
-            const source = (await getScriptSource(initScript)) || detectInitScriptContent()
-            scriptList.push({
-                name: 'timecat-init',
-                src: source
-            })
-            const replayOptions = window.G_REPLAY_OPTIONS
-            exportReplay({
-                ...replayOptions,
-                scripts: scriptList
+                function detectSDKContent() {
+                    return Array.from(scripts)
+                        .map(script => script.textContent)
+                        .find(content =>
+                            content === null || content === void 0 ? void 0 : content.trim().startsWith('var TimeCat')
+                        )
+                }
+                function detectInitScriptContent() {
+                    return Array.from(scripts)
+                        .map(script => script.textContent)
+                        .find(content => {
+                            if (content) {
+                                return /new\s(TimeCat\.)?Player/.test(content)
+                            }
+                        })
+                }
+                function getScriptSource(scriptElement) {
+                    return __awaiter(this, void 0, void 0, function* () {
+                        if (!scriptElement) {
+                            return
+                        }
+                        return (
+                            scriptElement.textContent ||
+                            (yield getRawScriptContent(scriptElement.src.trim())) ||
+                            scriptElement.src
+                        )
+                    })
+                }
+                const defaultSDK = `https://cdn.jsdelivr.net/npm/timecatjs/dist/timecat.global.prod.js`
+                const SDKSource =
+                    (yield getScriptSource(SDKScript)) || detectSDKSrc() || detectSDKContent() || defaultSDK
+                scriptList.push({
+                    name: 'timecat',
+                    src: SDKSource
+                })
+                const defaultInitScript = `new window.TimeCat.Player({autoplay: true})`
+                const source = (yield getScriptSource(initScript)) || detectInitScriptContent() || defaultInitScript
+                scriptList.push({
+                    name: 'timecat-init',
+                    src: source
+                })
+                const replayOptions = window.G_REPLAY_OPTIONS
+                exportReplay(Object.assign(Object.assign({}, replayOptions), { scripts: scriptList }))
             })
         }
     }
@@ -18092,6 +18182,14 @@ var TimeCat = (function (exports) {
             cancelAnimationFrame(this.requestID)
         }
     }
+
+    var PlayerEventTypes
+    ;(function (PlayerEventTypes) {
+        PlayerEventTypes['PLAY'] = 'play'
+        PlayerEventTypes['PAUSE'] = 'pause'
+        PlayerEventTypes['STOP'] = 'stop'
+        PlayerEventTypes['SPEED'] = 'speed'
+    })(PlayerEventTypes || (PlayerEventTypes = {}))
 
     class PlayerComponent {
         constructor(options, c, pointer, progress, broadcaster) {
@@ -18122,10 +18220,15 @@ var TimeCat = (function (exports) {
                     if (state) {
                         this.progressState = reduxStore.getState('progress')
                         const speed = state.speed
+                        const curSpeed = this.speed
                         this.speed = speed
                         this.frames = this.getAccuratelyFrame()
+                        observer.emit(PlayerEventTypes.SPEED, speed)
                         if (speed > 0) {
                             this.play()
+                            if (curSpeed === 0) {
+                                observer.emit(PlayerEventTypes.PLAY)
+                            }
                         } else {
                             this.pause()
                         }
@@ -18180,46 +18283,49 @@ var TimeCat = (function (exports) {
             this.curViewDiffTime = 0
             window.G_REPLAY_DATA = firstData
         }
-        async switchNextView(delayTime) {
-            const { G_REPLAY_DATA: rData, G_REPLAY_PACKS: packs } = window
-            if (!this.records) {
-                return
-            }
-            const nextData = getNextData(rData)
-            if (!nextData) {
-                return
-            }
-            function getNextData(curData) {
-                for (let i = 0; i < packs.length; i++) {
-                    const body = packs[i].body
-                    const nextPackBody = packs[i + 1]?.body
-                    for (let j = 0; j < body.length; j++) {
-                        if (curData === body[j]) {
-                            const next = body[j + 1]
-                            if (next) {
-                                return next
-                            } else if (nextPackBody.length) {
-                                return nextPackBody[0]
+        switchNextView(delayTime) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const { G_REPLAY_DATA: rData, G_REPLAY_PACKS: packs } = window
+                if (!this.records) {
+                    return
+                }
+                const nextData = getNextData(rData)
+                if (!nextData) {
+                    return
+                }
+                function getNextData(curData) {
+                    var _a
+                    for (let i = 0; i < packs.length; i++) {
+                        const body = packs[i].body
+                        const nextPackBody = (_a = packs[i + 1]) === null || _a === void 0 ? void 0 : _a.body
+                        for (let j = 0; j < body.length; j++) {
+                            if (curData === body[j]) {
+                                const next = body[j + 1]
+                                if (next) {
+                                    return next
+                                } else if (nextPackBody.length) {
+                                    return nextPackBody[0]
+                                }
+                                return null
                             }
-                            return null
                         }
                     }
+                    return null
                 }
-                return null
-            }
-            const curEndTime = +this.records.slice(-1)[0].time
-            const nextStartTime = +nextData.records[0].time
-            this.curViewDiffTime += nextStartTime - curEndTime
-            window.G_REPLAY_DATA = nextData
-            this.records = nextData.records
-            this.audioData = nextData.audio
-            this.initAudio()
-            this.curViewEndTime = +this.records.slice(-1)[0].time
-            this.recordIndex = 0
-            if (delayTime) {
-                await delay(delayTime)
-            }
-            this.c.setViewState()
+                const curEndTime = +this.records.slice(-1)[0].time
+                const nextStartTime = +nextData.records[0].time
+                this.curViewDiffTime += nextStartTime - curEndTime
+                window.G_REPLAY_DATA = nextData
+                this.records = nextData.records
+                this.audioData = nextData.audio
+                this.initAudio()
+                this.curViewEndTime = +this.records.slice(-1)[0].time
+                this.recordIndex = 0
+                if (delayTime) {
+                    yield delay(delayTime)
+                }
+                this.c.setViewState()
+            })
         }
         play() {
             this.playAudio()
@@ -18240,38 +18346,40 @@ var TimeCat = (function (exports) {
             this.RAF.start()
             const initTime = getTime()
             this.startTime = 0
-            async function loop(t, loopIndex) {
-                const timeStamp = getTime() - initTime
-                if (this.frameIndex > 0 && !this.frames[this.frameIndex]) {
-                    this.stop()
-                    return
-                }
-                if (!this.startTime) {
-                    this.startTime = Number(this.frames[this.frameIndex])
-                }
-                const currTime = this.startTime + timeStamp * this.speed
-                let nextTime = Number(this.frames[this.frameIndex])
-                if (nextTime > this.curViewEndTime - this.curViewDiffTime) {
-                    await this.switchNextView(300)
-                }
-                while (nextTime && currTime >= nextTime) {
-                    this.renderEachFrame()
-                    this.frameIndex++
-                    nextTime = Number(this.frames[this.frameIndex])
-                }
-                this.elapsedTime = (currTime - this.frames[0]) / 1000
-                const frameCount = Math.floor(2 / (this.frameInterval / 1000))
-                const checkInterval = !(this.frameIndex % frameCount)
-                const shouldCheckAudioTime = this.audioNode.src && checkInterval && !((loopIndex % frameCount) * 2)
-                if (shouldCheckAudioTime) {
-                    const allowDiff = 200
-                    if (
-                        Math.abs((this.elapsedTime - this.audioNode.currentTime) * 1000) >
-                        this.audioOffset + allowDiff
-                    ) {
-                        this.syncAudioCurrentTime()
+            function loop(t, loopIndex) {
+                return __awaiter(this, void 0, void 0, function* () {
+                    const timeStamp = getTime() - initTime
+                    if (this.frameIndex > 0 && !this.frames[this.frameIndex]) {
+                        this.stop()
+                        return
                     }
-                }
+                    if (!this.startTime) {
+                        this.startTime = Number(this.frames[this.frameIndex])
+                    }
+                    const currTime = this.startTime + timeStamp * this.speed
+                    let nextTime = Number(this.frames[this.frameIndex])
+                    if (nextTime > this.curViewEndTime - this.curViewDiffTime) {
+                        yield this.switchNextView(300)
+                    }
+                    while (nextTime && currTime >= nextTime) {
+                        this.renderEachFrame()
+                        this.frameIndex++
+                        nextTime = Number(this.frames[this.frameIndex])
+                    }
+                    this.elapsedTime = (currTime - this.frames[0]) / 1000
+                    const frameCount = Math.floor(2 / (this.frameInterval / 1000))
+                    const checkInterval = !(this.frameIndex % frameCount)
+                    const shouldCheckAudioTime = this.audioNode.src && checkInterval && !((loopIndex % frameCount) * 2)
+                    if (shouldCheckAudioTime) {
+                        const allowDiff = 200
+                        if (
+                            Math.abs((this.elapsedTime - this.audioNode.currentTime) * 1000) >
+                            this.audioOffset + allowDiff
+                        ) {
+                            this.syncAudioCurrentTime()
+                        }
+                    }
+                })
             }
         }
         playAudio() {
@@ -18341,6 +18449,7 @@ var TimeCat = (function (exports) {
                 }
             })
             this.pauseAudio()
+            observer.emit(PlayerEventTypes.PAUSE)
         }
         stop() {
             this.speed = 0
@@ -18350,9 +18459,12 @@ var TimeCat = (function (exports) {
             this.elapsedTime = 0
             this.pause()
             this.audioNode.currentTime = 0
+            observer.emit(PlayerEventTypes.STOP)
         }
-        async execFrame(record) {
-            updateDom.call(this, record)
+        execFrame(record) {
+            return __awaiter(this, void 0, void 0, function* () {
+                updateDom.call(this, record)
+            })
         }
         getPercentInterval() {
             const k = 0.08
@@ -18389,15 +18501,17 @@ var TimeCat = (function (exports) {
             this.pointer.style.left = this.x + 'px'
             this.pointer.style.top = this.y + 'px'
         }
-        async click(x, y) {
-            this.move(x, y)
-            if (this.pointer.hasAttribute('active')) {
-                return
-            }
-            await delay(200)
-            setAttribute(this.pointer, 'active', '')
-            await delay(400)
-            setAttribute(this.pointer, 'active', null)
+        click(x, y) {
+            return __awaiter(this, void 0, void 0, function* () {
+                this.move(x, y)
+                if (this.pointer.hasAttribute('active')) {
+                    return
+                }
+                yield delay(200)
+                setAttribute(this.pointer, 'active', '')
+                yield delay(400)
+                setAttribute(this.pointer, 'active', null)
+            })
         }
     }
 
@@ -18409,21 +18523,23 @@ var TimeCat = (function (exports) {
             this.currentProgress = this.progress.querySelector('.cat-current-progress')
             this.slider = this.progress.querySelector('.cat-slider-bar')
         }
-        async setProgressAnimation(index, total, interval, speed) {
-            if (!index && !speed) {
-                return
-            }
-            this.currentProgress.classList.remove('active')
-            await delay(20)
-            this.currentProgress.style.removeProperty('transition')
-            if (!speed) {
-                this.currentProgress.style.width = this.currentProgress.offsetWidth + 'px'
-                this.currentProgress.style.setProperty('transition', 'none')
-                return
-            }
-            const duration = ((total - index) * interval) / speed / 1000
-            this.currentProgress.style.transitionDuration = duration + 's'
-            this.currentProgress.classList.add('active')
+        setProgressAnimation(index, total, interval, speed) {
+            return __awaiter(this, void 0, void 0, function* () {
+                if (!index && !speed) {
+                    return
+                }
+                this.currentProgress.classList.remove('active')
+                yield delay(20)
+                this.currentProgress.style.removeProperty('transition')
+                if (!speed) {
+                    this.currentProgress.style.width = this.currentProgress.offsetWidth + 'px'
+                    this.currentProgress.style.setProperty('transition', 'none')
+                    return
+                }
+                const duration = ((total - index) * interval) / speed / 1000
+                this.currentProgress.style.transitionDuration = duration + 's'
+                this.currentProgress.classList.add('active')
+            })
         }
         updateTimer(second) {
             const t = secondToDate(second)
@@ -18490,64 +18606,69 @@ var TimeCat = (function (exports) {
             nodeStore.reset()
             this.init(options)
         }
-        async init(options) {
-            const opts = { destroyStore: this.destroyStore, ...defaultReplayOptions, ...options }
-            window.G_REPLAY_OPTIONS = opts
-            this.destroyStore.add(() => reduxStore.unsubscribe())
-            const replayPacks = await this.getReplayData(opts)
-            if (!replayPacks || !replayPacks.length) {
-                return
-            }
-            const { records, audio } = (window.G_REPLAY_DATA = this.getFirstReplayData(replayPacks))
-            const hasAudio = audio && (audio.src || audio.bufferStrList.length)
-            const c = new ContainerComponent(opts)
-            new Panel(c, opts)
-            showStartMask()
-            this.fmp = new FMP()
-            this.fmp.ready(async () => {
-                if (hasAudio) {
-                    await waitStart()
+        init(options) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const opts = Object.assign(
+                    Object.assign({ destroyStore: this.destroyStore }, defaultReplayOptions),
+                    options
+                )
+                window.G_REPLAY_OPTIONS = opts
+                this.destroyStore.add(() => reduxStore.unsubscribe())
+                const replayPacks = yield this.getReplayData(opts)
+                if (!replayPacks || !replayPacks.length) {
+                    return
                 }
-                removeStartPage()
-                if (records.length) {
-                    const firstRecord = records[0]
-                    const replayPacks = window.G_REPLAY_PACKS
-                    const startTime = firstRecord.time
-                    const endTime =
-                        replayPacks.reduce((packAcc, pack) => {
-                            return (
-                                packAcc +
-                                pack.body
-                                    .map(replayData => replayData.records)
-                                    .reduce((acc, records) => {
-                                        return acc + (+records.slice(-1)[0].time - +records[0].time)
-                                    }, 0)
-                            )
-                        }, 0) + +startTime
-                    reduxStore.dispatch({
-                        type: ProgressTypes.INFO,
-                        data: {
-                            frame: 0,
-                            curTime: Number(startTime),
-                            startTime: Number(startTime),
-                            endTime,
-                            length: records.length
+                const { records, audio } = (window.G_REPLAY_DATA = this.getFirstReplayData(replayPacks))
+                const hasAudio = audio && (audio.src || audio.bufferStrList.length)
+                const c = new ContainerComponent(opts)
+                new Panel(c, opts)
+                showStartMask()
+                this.fmp = new FMP()
+                this.fmp.ready(() =>
+                    __awaiter(this, void 0, void 0, function* () {
+                        if (hasAudio) {
+                            yield waitStart()
+                        }
+                        removeStartPage()
+                        if (records.length) {
+                            const firstRecord = records[0]
+                            const replayPacks = window.G_REPLAY_PACKS
+                            const startTime = firstRecord.time
+                            const endTime =
+                                replayPacks.reduce((packAcc, pack) => {
+                                    return (
+                                        packAcc +
+                                        pack.body
+                                            .map(replayData => replayData.records)
+                                            .reduce((acc, records) => {
+                                                return acc + (+records.slice(-1)[0].time - +records[0].time)
+                                            }, 0)
+                                    )
+                                }, 0) + +startTime
+                            reduxStore.dispatch({
+                                type: ProgressTypes.PROGRESS,
+                                data: {
+                                    frames: records.length,
+                                    startTime: Number(startTime),
+                                    endTime
+                                }
+                            })
+                            if (opts.autoplay || hasAudio) {
+                                reduxStore.dispatch({
+                                    type: PlayerTypes.SPEED,
+                                    data: { speed: 1 }
+                                })
+                            }
                         }
                     })
-                    if (opts.autoplay || hasAudio) {
-                        reduxStore.dispatch({
-                            type: PlayerTypes.SPEED,
-                            data: { speed: 1 }
-                        })
+                )
+                if (!records.length) {
+                    const panel = document.querySelector('#cat-panel')
+                    if (panel) {
+                        panel.setAttribute('style', 'display: none')
                     }
                 }
             })
-            if (!records.length) {
-                const panel = document.querySelector('#cat-panel')
-                if (panel) {
-                    panel.setAttribute('style', 'display: none')
-                }
-            }
         }
         getFirstReplayData(replayPacks) {
             return replayPacks[0].body[0]
@@ -18570,73 +18691,79 @@ var TimeCat = (function (exports) {
             return packs
         }
         dispatchEvent(type, data) {
-            event = new CustomEvent(type, { detail: data })
+            const event = new CustomEvent(type, { detail: data })
             window.dispatchEvent(event)
         }
-        async dataReceiver(receiver) {
-            let replayPack
-            let head
-            const body = []
-            const self = this
-            return await new Promise(resolve => {
-                receiver(data => {
-                    if (replayPack) {
-                        this.dispatchEvent('record-data', data)
-                    } else {
-                        if (!data) {
-                            return
-                        }
-                        if (data.type === exports.RecordType.HEAD) {
-                            head = data.data
-                        } else if (data && isSnapshot(data)) {
-                            if (head && body) {
-                                body.push({
-                                    snapshot: data,
-                                    records: [],
-                                    audio: { src: '', bufferStrList: [], subtitles: [], opts: {} }
-                                })
-                                replayPack = {
-                                    head,
-                                    body
-                                }
-                                resolve([replayPack])
-                                if (self.fmp) {
-                                    self.fmp.observe()
-                                }
-                            }
+        dataReceiver(receiver) {
+            return __awaiter(this, void 0, void 0, function* () {
+                let replayPack
+                let head
+                const body = []
+                const self = this
+                return yield new Promise(resolve => {
+                    receiver(data => {
+                        if (replayPack) {
+                            this.dispatchEvent('record-data', data)
                         } else {
-                            return
+                            if (!data) {
+                                return
+                            }
+                            if (data.type === exports.RecordType.HEAD) {
+                                head = data.data
+                            } else if (data && isSnapshot(data)) {
+                                if (head && body) {
+                                    body.push({
+                                        snapshot: data,
+                                        records: [],
+                                        audio: { src: '', bufferStrList: [], subtitles: [], opts: {} }
+                                    })
+                                    replayPack = {
+                                        head,
+                                        body
+                                    }
+                                    resolve([replayPack])
+                                    if (self.fmp) {
+                                        self.fmp.observe()
+                                    }
+                                }
+                            } else {
+                                return
+                            }
                         }
-                    }
+                    })
                 })
             })
         }
-        async getDataFromDB() {
-            const DBOperator = await getDBOperator
-            const data = await DBOperator.readAllRecords()
-            if (data) {
-                return classifyRecords(data)
-            }
-            return null
+        getDataFromDB() {
+            return __awaiter(this, void 0, void 0, function* () {
+                const DBOperator = yield getDBOperator
+                const data = yield DBOperator.readAllRecords()
+                if (data) {
+                    return classifyRecords(data)
+                }
+                return null
+            })
         }
-        async getReplayData(options) {
-            const { receiver, packs, records } = options
-            const rawReplayPacks =
-                (records && classifyRecords(records)) ||
-                packs ||
-                (receiver && (await this.dataReceiver(receiver))) ||
-                this.getGZipData() ||
-                (await this.getDataFromDB()) ||
-                window.G_REPLAY_PACKS
-            if (!rawReplayPacks) {
-                throw logError('Replay data not found')
-            }
-            const replayPacks = this.decodePacks(rawReplayPacks)
-            if (replayPacks) {
-                window.G_REPLAY_PACKS = replayPacks
-                return replayPacks
-            }
-            return null
+        getReplayData(options) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const { receiver, packs, records } = options
+                const rawReplayPacks =
+                    (records && classifyRecords(records)) ||
+                    packs ||
+                    (receiver && (yield this.dataReceiver(receiver))) ||
+                    this.getGZipData() ||
+                    (yield this.getDataFromDB()) ||
+                    window.G_REPLAY_PACKS
+                if (!rawReplayPacks) {
+                    throw logError('Replay data not found')
+                }
+                const replayPacks = this.decodePacks(rawReplayPacks)
+                if (replayPacks) {
+                    window.G_REPLAY_PACKS = replayPacks
+                    return replayPacks
+                }
+                return null
+            })
         }
         decodePacks(packs) {
             const { atob } = radix64
@@ -18653,16 +18780,23 @@ var TimeCat = (function (exports) {
         }
         destroy() {
             this.destroyStore.forEach(un => un())
+            observer.destroy()
+        }
+        on(key, fn) {
+            observer.on(key, fn)
         }
     }
 
-    const version$1 = '1.2.0-alpha.8'
+    const version$1 = '1.2.0-alpha.11'
 
     exports.Player = Player
     exports.Recorder = Recorder
     exports.classifyRecords = classifyRecords
+    exports.debounce = debounce
+    exports.delay = delay
     exports.exportReplay = exportReplay
     exports.radix64 = radix64
+    exports.throttle = throttle
     exports.version = version$1
 
     return exports
