@@ -213,19 +213,6 @@ interface SubtitlesData {
     text: string
 }
 
-export interface RecordInternalOptions extends RecordOptions {
-    context: Window
-    skip?: boolean
-}
-
-export interface RecordOptions {
-    mode?: 'live' | 'default'
-    audio?: boolean
-    write?: boolean
-    uploadUrl?: string
-    plugins?: any[]
-}
-
 export interface RecorderOptions {
     sampleBits: 8 | 16
     sampleRate: 8000 | 16000 | 22050 | 24000 | 44100 | 48000
@@ -254,7 +241,6 @@ export interface Constructable<T> {
 export interface ReplayOptions {
     mode?: 'live' | 'default'
     receiver?: (sender: (data: RecordData) => void) => void
-    proxy?: string
     autoplay?: boolean
     packs?: ReplayPack[]
     records?: RecordData[]

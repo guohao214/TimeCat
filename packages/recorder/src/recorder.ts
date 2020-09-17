@@ -1,37 +1,45 @@
 import { watchers as RecorderWatchers } from './watchers'
 import { RecordAudio } from './audio'
-import { RecordData, RecordOptions, ValueOf, RecordType, RecordInternalOptions, TerminateRecord } from '@timecat/share'
-import { getDBOperator, logError, Transmitter, getRadix64TimeStr, IndexedDBOperator, nodeStore } from '@timecat/utils'
+import { RecordData, ValueOf, RecordType, TerminateRecord } from '@timecat/share'
+import { getDBOperator, logError, getRadix64TimeStr, IndexedDBOperator, nodeStore } from '@timecat/utils'
 import { Snapshot } from './snapshot'
 import { getHeadData } from './head'
-import { Pluginable } from './pluginable'
+import { Pluginable, RecorderPlugin } from './pluginable'
+
+export interface RecordInternalOptions extends RecordOptions {
+    context: Window
+    skip?: boolean
+}
+
+export interface RecordOptions {
+    mode?: 'live' | 'default'
+    audio?: boolean
+    write?: boolean
+    plugins?: RecorderPlugin[]
+}
 
 export class Recorder extends Pluginable {
     private static defaultRecordOpts = { mode: 'default', write: true, context: window } as RecordOptions
     private destroyStore: Set<Function> = new Set()
     private listenStore: Set<Function> = new Set()
     private onDataCallback: Function
-    private db: IndexedDBOperator
     private watchers: Array<ValueOf<typeof RecorderWatchers> | typeof RecordAudio | typeof Snapshot>
     private watchesReadyPromise = new Promise(resolve => (this.watcherResolve = resolve))
     private watcherResolve: Function
+
+    public db: IndexedDBOperator
 
     constructor(options?: RecordOptions) {
         super(options)
         const opts = { ...Recorder.defaultRecordOpts, ...options } as RecordInternalOptions
         this.watchers = this.getWatchers(opts)
-
-        // TODO: Plugin module
-        if (opts && opts.uploadUrl) {
-            new Transmitter(opts.uploadUrl)
-        }
-
         this.init(opts)
     }
 
     private async init(options: RecordInternalOptions) {
         const db = await getDBOperator
         this.db = db
+        this.pluginsOnload()
         this.hooks.beforeRun.call(this)
         this.record(options)
         this.hooks.run.call(this)

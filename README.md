@@ -39,7 +39,7 @@ TimeCat is a Web Record tool, passing a unique way and algorithm to provide ultr
 
 Provides Chrome plugin and supports one-click record and export
 
-| <img src="./assets/logo.png" width="30">| [TimeCat-Chrome](https://chrome.google.com/webstore/detail/timecat-chrome/jgnkkambbdmhfdbdbkljlenddlbplhal?hl=en&authuser=0) |
+| <img src="articles/images/logo.png" width="30">| [TimeCat-Chrome](https://chrome.google.com/webstore/detail/timecat-chrome/jgnkkambbdmhfdbdbkljlenddlbplhal?hl=en&authuser=0) |
 |--|--|
 
 ## Installation
@@ -65,7 +65,7 @@ Add script tags in your browser and use the global variable ``TimeCat``
 ## Usage
  - [Quick Start](articles/quick-start.md)
 
-## Technology
+## Articles
  - [How are TimeCat works](articles/technology.md)
 
 ## Contributing

@@ -1,7 +1,7 @@
 import { SyncHook } from 'tapable'
-import { RecordOptions } from '@timecat/share'
+import { RecordOptions } from './recorder'
 
-const defaultPlugins: IPlugin[] = [] // todo
+const defaultPlugins: RecorderPlugin[] = [] // todo
 
 const HOOKS = {
     beforeRun: new SyncHook(),
@@ -10,7 +10,7 @@ const HOOKS = {
     end: new SyncHook()
 }
 
-interface IPlugin {
+export interface RecorderPlugin {
     apply(plugin: Pluginable): void
 }
 
@@ -22,21 +22,24 @@ export class Pluginable {
     private initPlugin(options?: RecordOptions) {
         const { plugins } = options || {}
         this.plugins.push(...defaultPlugins, ...(plugins || []))
+    }
+
+    pluginsOnload() {
         this.plugins.forEach(plugin => {
-            plugin.apply(this)
+            plugin.apply.call(plugin, this)
         })
     }
 
-    private plugins: IPlugin[] = []
+    private plugins: RecorderPlugin[] = []
     public hooks = HOOKS
 
-    plugin(type: keyof typeof HOOKS, cb: (data: any) => void) {
+    plugin = (type: keyof typeof HOOKS, cb: (data: any) => void) => {
         const name = this.hooks[type].constructor.name
         const method = /Async/.test(name) ? 'tapAsync' : 'tap'
         this.hooks[type][method](type, cb)
     }
 
-    use(plugin: IPlugin): void {
+    use(plugin: RecorderPlugin): void {
         this.plugins.push(plugin)
         plugin.apply(this)
     }
