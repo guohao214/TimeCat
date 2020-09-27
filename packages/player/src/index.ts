@@ -1,6 +1,5 @@
 import { getDBOperator, isSnapshot, classifyRecords, radix64, logError, nodeStore } from '@timecat/utils'
 import { ContainerComponent } from './container'
-import { Panel } from './panel'
 import pako from 'pako'
 import {
     SnapshotRecord,
@@ -45,10 +44,34 @@ export class Player {
         const { records, audio } = (window.G_REPLAY_DATA = this.getFirstReplayData(replayPacks))
         const hasAudio = audio && (audio.src || audio.bufferStrList.length)
 
-        const c = new ContainerComponent(opts)
-        new Panel(c, opts)
+        if (records.length) {
+            const firstRecord = records[0]
+            const startTime = firstRecord.time
+            const endTime =
+                replayPacks.reduce((packAcc, pack) => {
+                    return (
+                        packAcc +
+                        pack.body
+                            .map((replayData: ReplayData) => replayData.records)
+                            .reduce((acc: number, records: RecordData[]) => {
+                                return acc + (+records.slice(-1)[0].time - +records[0].time)
+                            }, 0)
+                    )
+                }, 0) + +startTime
 
-        showStartMask()
+            reduxStore.dispatch({
+                type: ProgressTypes.PROGRESS,
+                data: {
+                    frames: records.length,
+                    startTime: Number(startTime),
+                    endTime
+                }
+            })
+        }
+
+        const c = new ContainerComponent(opts)
+
+        showStartMask(c)
 
         this.fmp = new FMP()
 
@@ -56,34 +79,10 @@ export class Player {
             if (hasAudio) {
                 await waitStart()
             }
-            removeStartPage()
+
+            removeStartPage(c)
 
             if (records.length) {
-                const firstRecord = records[0]
-
-                const replayPacks = window.G_REPLAY_PACKS as ReplayPack[]
-                const startTime = firstRecord.time
-                const endTime =
-                    replayPacks.reduce((packAcc, pack) => {
-                        return (
-                            packAcc +
-                            pack.body
-                                .map((replayData: ReplayData) => replayData.records)
-                                .reduce((acc: number, records: RecordData[]) => {
-                                    return acc + (+records.slice(-1)[0].time - +records[0].time)
-                                }, 0)
-                        )
-                    }, 0) + +startTime
-
-                reduxStore.dispatch({
-                    type: ProgressTypes.PROGRESS,
-                    data: {
-                        frames: records.length,
-                        startTime: Number(startTime),
-                        endTime
-                    }
-                })
-
                 if (opts.autoplay || hasAudio) {
                     reduxStore.dispatch({
                         type: PlayerTypes.SPEED,
@@ -94,7 +93,7 @@ export class Player {
         })
 
         if (!records.length) {
-            const panel = document.querySelector('#cat-panel')
+            const panel = c.container.querySelector('#cat-panel')
             if (panel) {
                 panel.setAttribute('style', 'display: none')
             }

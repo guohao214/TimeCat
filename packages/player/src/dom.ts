@@ -23,6 +23,7 @@ import FIXED_CSS from './fixed.scss'
 import { PlayerComponent } from './player'
 import { nodeStore, isElementNode, isExistingNode, delay, isVNode, revertStrByPatches } from '@timecat/utils'
 import { setAttribute, createSpecialNode, convertVNode } from '@timecat/virtual-dom'
+import { ContainerComponent } from './container'
 
 /**
  * if return true then revert
@@ -49,6 +50,10 @@ function insertOrMoveNode(data: UpdateNodeData, orderSet: Set<number>) {
 
             nextNode = findNextNode(nextId)
             if (!nextNode) {
+                return true
+            }
+
+            if (!parentNode.contains(nextNode)) {
                 return true
             }
         }
@@ -282,50 +287,7 @@ export async function updateDom(this: PlayerComponent, Record: RecordData) {
         }
         case RecordType.CANVAS: {
             await actionDelay()
-            const { src, id, strokes } = data as UnionToIntersection<CanvasRecordData>
-            const target = nodeStore.getNode(id) as HTMLCanvasElement
-            if (!target) {
-                return
-            }
-            const ctx = target.getContext('2d')!
-
-            if (src) {
-                const image = new Image()
-                image.src = src
-                image.onload = function (this: HTMLImageElement) {
-                    ctx.drawImage(this, 0, 0)
-                }
-            } else {
-                async function createChain() {
-                    type Strokes = UnionToIntersection<CanvasRecordData>['strokes']
-                    function splitStrokes(strokesArray: Strokes[]) {
-                        const result: Strokes[] = []
-                        strokesArray.forEach(strokes => {
-                            const len = strokes.length
-                            const pivot = Math.floor(len / 2)
-                            result.push(...[strokes.splice(0, pivot), strokes])
-                        })
-                        return result
-                    }
-
-                    // TODO expect stroke smooth (elapsed time)
-                    for (const strokesArray of splitStrokes(splitStrokes([strokes]))) {
-                        // await delay(0) // have problem here
-                        for (const stroke of strokesArray) {
-                            const { name, args } = stroke
-                            if (Array.isArray(args)) {
-                                if (name === 'drawImage') {
-                                    args[0] = nodeStore.getNode(args[0])
-                                }
-                                ;(ctx[name] as Function).apply(ctx, args)
-                            } else {
-                                ;(ctx[name] as Object) = args
-                            }
-                        }
-                    }
-                }
-                createChain()
-            }
+            renderCanvas(data as CanvasRecordData)
         }
 
         default: {
@@ -334,8 +296,8 @@ export async function updateDom(this: PlayerComponent, Record: RecordData) {
     }
 }
 
-export function showStartMask() {
-    const startPage = document.querySelector('#cat-start-page')! as HTMLElement
+export function showStartMask(c: ContainerComponent) {
+    const startPage = c.container.querySelector('#cat-start-page')! as HTMLElement
     startPage.setAttribute('style', '')
 }
 
@@ -346,8 +308,8 @@ function showStartBtn() {
     return btn
 }
 
-export function removeStartPage() {
-    const startPage = document.querySelector('#cat-start-page') as HTMLElement
+export function removeStartPage(c: ContainerComponent) {
+    const startPage = c.container.querySelector('#cat-start-page') as HTMLElement
     startPage?.parentElement?.removeChild(startPage)
 }
 
@@ -390,4 +352,39 @@ export function injectIframeContent(contentDocument: Document, snapshotData: Sna
 // waiting for mouse or scroll transform animation finish
 async function actionDelay() {
     return delay(200)
+}
+
+function renderCanvas(canvasRecordData: CanvasRecordData) {
+    const data = canvasRecordData as UnionToIntersection<CanvasRecordData>
+    const { src, status, id, strokes } = data
+    const canvas = nodeStore.getNode(id) as HTMLCanvasElement
+    if (!canvas) {
+        return
+    }
+    const ctx = canvas.getContext('2d')!
+    if (src) {
+        const image = new Image()
+        image.src = src
+        image.onload = function (this: HTMLImageElement) {
+            ctx.drawImage(this, 0, 0)
+        }
+    } else if (status) {
+        Object.keys(status).forEach(key => {
+            ;(ctx as any)[key] = status[key]
+        })
+    } else {
+        // TODO expect stroke smooth (elapsed time)
+        for (const stroke of strokes) {
+            // await delay(0) // have problem here
+            const { name, args } = stroke
+            if (Array.isArray(args)) {
+                if (name === 'drawImage') {
+                    args[0] = nodeStore.getNode(args[0])
+                }
+                ;(ctx[name] as Function).apply(ctx, args)
+            } else {
+                ;(ctx[name] as Object) = args
+            }
+        }
+    }
 }
